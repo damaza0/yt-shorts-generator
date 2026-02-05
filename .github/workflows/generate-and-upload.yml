@@ -2,14 +2,14 @@ name: Generate and Upload YouTube Short
 
 on:
   schedule:
-    # Runs at 8 AM, 2 PM, and 8 PM Pacific Time
-    # Cron uses UTC, so we convert:
-    # 8 AM PT = 16:00 UTC (or 15:00 during PDT)
-    # 2 PM PT = 22:00 UTC (or 21:00 during PDT)
-    # 8 PM PT = 04:00 UTC next day (or 03:00 during PDT)
-    - cron: '0 16 * * *'   # 8 AM PT
-    - cron: '0 22 * * *'   # 2 PM PT
-    - cron: '0 4 * * *'    # 8 PM PT
+    # Runs at 9 AM, 12 PM, and 3 PM Pacific Time
+    # Cron uses UTC, so we convert (PST = UTC-8, PDT = UTC-7):
+    # 9 AM PT = 17:00 UTC (PST) or 16:00 UTC (PDT)
+    # 12 PM PT = 20:00 UTC (PST) or 19:00 UTC (PDT)
+    # 3 PM PT = 23:00 UTC (PST) or 22:00 UTC (PDT)
+    - cron: '0 17 * * *'   # 9 AM PT
+    - cron: '0 20 * * *'   # 12 PM PT
+    - cron: '0 23 * * *'   # 3 PM PT
 
   workflow_dispatch:  # Allow manual trigger
     inputs:
@@ -72,6 +72,14 @@ jobs:
       - name: Create required directories
         run: |
           mkdir -p cache/videos cache/music output assets/music
+
+      - name: Random delay (0-5 minutes)
+        if: github.event_name == 'schedule'
+        run: |
+          # Random delay between 0 and 300 seconds (5 minutes)
+          DELAY=$((RANDOM % 301))
+          echo "Waiting ${DELAY} seconds before uploading..."
+          sleep $DELAY
 
       - name: Generate and upload video
         env:
