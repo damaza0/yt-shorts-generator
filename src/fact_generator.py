@@ -259,9 +259,9 @@ Respond with JSON only:
         if "#Shorts" not in description:
             description = description.rstrip() + "\n\n#Shorts"
 
-        # Add channel branding if not present
-        if channel_name and channel_name not in description:
-            description += f"\n\nFollow @{channel_name.replace(' ', '')} for more!"
+        # Add subscribe CTA
+        if "Subscribe" not in description:
+            description += "\n\nSubscribe for more interesting facts!"
 
         return YouTubeMetadata(
             title=self._clean_text(title),
