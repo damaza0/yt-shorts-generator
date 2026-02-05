@@ -1,0 +1,23 @@
+# Environment
+.env
+.env.*
+venv/
+__pycache__/
+*.pyc
+
+# YouTube OAuth credentials (NEVER commit these!)
+client_secrets.json
+client_secret*.json
+token.json
+.env.youtube
+
+# Cache and output
+cache/
+output/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
