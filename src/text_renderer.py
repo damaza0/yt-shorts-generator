@@ -129,9 +129,9 @@ class TextRenderer:
             logo = Image.open(self.logo_path).convert("RGBA")
             logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
 
-            # Center the logo horizontally with more top padding to prevent cropping
+            # Center the logo horizontally, moved down 90px from original position
             logo_x = (self.width - logo_size) // 2
-            logo_y = 55  # More padding from top to prevent cropping
+            logo_y = 145  # 55 + 90 = 145 (moved down 90 pixels)
 
             # Paste logo onto image
             img.paste(logo, (logo_x, logo_y), logo)
@@ -140,7 +140,7 @@ class TextRenderer:
             name_bbox = draw.textbbox((0, 0), self.channel_name, font=self.channel_name_font)
             name_width = name_bbox[2] - name_bbox[0]
             name_x = (self.width - name_width) // 2
-            name_y = logo_y + logo_size + 12
+            name_y = logo_y + logo_size + 10  # Slightly tighter spacing
 
             # Draw channel name with shadow
             draw.text((name_x + 2, name_y + 2), self.channel_name,
@@ -152,14 +152,14 @@ class TextRenderer:
             handle_bbox = draw.textbbox((0, 0), self.channel_handle, font=self.channel_handle_font)
             handle_width = handle_bbox[2] - handle_bbox[0]
             handle_x = (self.width - handle_width) // 2
-            handle_y = name_y + 48  # More spacing for larger fonts
+            handle_y = name_y + 44  # Slightly tighter spacing
 
             draw.text((handle_x + 1, handle_y + 1), self.channel_handle,
                       font=self.channel_handle_font, fill=(40, 40, 40))
             draw.text((handle_x, handle_y), self.channel_handle,
                       font=self.channel_handle_font, fill=(140, 140, 140))
 
-            branding_end_y = handle_y + 40
+            branding_end_y = handle_y + 35
 
         # === STEP 2: Calculate content area and adjust fonts if needed ===
         content_top = branding_end_y + 25  # Space after branding

@@ -188,11 +188,10 @@ You MUST respond with valid JSON only:
 Fact Hook: {hook}
 Fact Text: {fact_text}
 Category: {category}
-Music Credit: {music_credit}
 
 RULES:
 1. Title: MUST be under 70 characters, include 1 emoji, be curiosity-driving
-2. Description: Include the fact, relevant hashtags (#Shorts is REQUIRED), and music credit at the end
+2. Description: Include the fact and relevant hashtags (#Shorts is REQUIRED). Keep it short and punchy.
 3. Tags: 8-12 relevant keywords for discovery (no hashtags, just words)
 
 TITLE TIPS (make it clickable):
@@ -204,14 +203,13 @@ TITLE TIPS (make it clickable):
 Respond with JSON only:
 {{
     "title": "Catchy title with emoji (under 70 chars)",
-    "description": "Full description with hashtags and credit",
+    "description": "Short description with hashtags",
     "tags": ["tag1", "tag2", "tag3", ...]
 }}"""
 
     def generate_metadata(
         self,
         fact: GeneratedFact,
-        music_credit: str = "",
         channel_name: str = "Daily Incredible Facts",
     ) -> YouTubeMetadata:
         """
@@ -219,7 +217,6 @@ Respond with JSON only:
 
         Args:
             fact: The generated fact to create metadata for
-            music_credit: Attribution for background music
             channel_name: YouTube channel name for branding
 
         Returns:
@@ -229,7 +226,6 @@ Respond with JSON only:
             hook=fact.hook,
             fact_text=fact.fact_text,
             category=fact.category,
-            music_credit=music_credit or "Royalty-free music",
         )
 
         response = self.client.chat.completions.create(
@@ -266,10 +262,6 @@ Respond with JSON only:
         # Add channel branding if not present
         if channel_name and channel_name not in description:
             description += f"\n\nFollow @{channel_name.replace(' ', '')} for more!"
-
-        # Ensure music credit is in description
-        if music_credit and music_credit not in description:
-            description += f"\n\nMusic: {music_credit}"
 
         return YouTubeMetadata(
             title=self._clean_text(title),

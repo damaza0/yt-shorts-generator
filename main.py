@@ -360,7 +360,6 @@ def auto(topic, duration, privacy, no_upload):
     click.echo("\n6. Generating YouTube metadata...")
     metadata = fact_gen.generate_metadata(
         fact=fact,
-        music_credit=music_credit,
         channel_name=settings.channel_name,
     )
     click.echo(f"   Title: {click.style(metadata.title, fg='yellow')}")
