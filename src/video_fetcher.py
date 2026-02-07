@@ -3,11 +3,13 @@ Stock video fetching from Pexels API.
 Downloads vertical/portrait videos for viral content.
 Uses URL-based descriptions for accurate fact matching.
 """
+import json
 import requests
 import random
 import re
 from pathlib import Path
 from dataclasses import dataclass
+from openai import OpenAI
 
 
 @dataclass
@@ -28,210 +30,105 @@ class VideoClip:
 # Generic scenery searches removed because they return boring videos
 VIRAL_TOPICS = [
     # Animals - mammals
-    "lion",
-    "tiger",
-    "elephant",
-    "wolf",
-    "bear",
-    "fox",
-    "deer",
-    "horse",
-    "gorilla",
-    "cheetah",
-    "leopard",
-    "giraffe",
-    "zebra",
-    "rhino",
-    "hippo",
-    "kangaroo",
-    "koala",
-    "panda",
-    "monkey",
-    "chimpanzee",
-    "orangutan",
-    "sloth",
-    "otter",
-    "seal",
-    "walrus",
-    "polar bear",
-    "buffalo",
-    "moose",
-    "camel",
+    "lion", "tiger", "elephant", "wolf", "bear", "fox", "deer", "horse",
+    "gorilla", "cheetah", "leopard", "giraffe", "zebra", "rhino", "hippo",
+    "kangaroo", "koala", "panda", "monkey", "chimpanzee", "orangutan",
+    "sloth", "otter", "seal", "walrus", "polar bear", "buffalo", "moose",
+    "camel", "platypus", "pangolin", "capybara", "red panda", "armadillo",
+    "porcupine", "hedgehog", "bat", "raccoon", "badger", "weasel",
+    "wolverine", "hyena", "jackal", "wild boar", "bison", "yak",
+    "meerkat", "lemur", "tapir", "manatee", "narwhal", "wombat",
 
     # Animals - marine
-    "shark",
-    "dolphin",
-    "whale",
-    "octopus",
-    "jellyfish",
-    "sea turtle",
-    "manta ray",
-    "stingray",
-    "seahorse",
-    "clownfish",
-    "orca",
-    "squid",
-    "crab",
-    "lobster",
-    "starfish",
-    "coral",
-    "anemone",
+    "shark", "dolphin", "whale", "octopus", "jellyfish", "sea turtle",
+    "manta ray", "stingray", "seahorse", "clownfish", "orca", "squid",
+    "crab", "lobster", "starfish", "coral", "anemone", "pufferfish",
+    "moray eel", "sea otter", "barracuda", "swordfish", "tuna",
+    "hammerhead shark", "whale shark", "nautilus", "sea lion",
+    "hermit crab", "sea urchin", "anglerfish", "parrotfish",
 
     # Animals - birds
-    "eagle",
-    "owl",
-    "parrot",
-    "hummingbird",
-    "peacock",
-    "flamingo",
-    "penguin",
-    "hawk",
-    "falcon",
-    "toucan",
-    "pelican",
-    "swan",
-    "crane",
-    "heron",
-    "kingfisher",
-    "woodpecker",
-    "crow",
-    "raven",
+    "eagle", "owl", "parrot", "hummingbird", "peacock", "flamingo",
+    "penguin", "hawk", "falcon", "toucan", "pelican", "swan", "crane",
+    "heron", "kingfisher", "woodpecker", "crow", "raven", "albatross",
+    "ostrich", "condor", "vulture", "robin", "cardinal", "blue jay",
+    "stork", "ibis", "kiwi bird", "cockatoo", "macaw",
 
     # Animals - reptiles & amphibians
-    "snake",
-    "crocodile",
-    "alligator",
-    "iguana",
-    "chameleon",
-    "gecko",
-    "komodo dragon",
-    "tortoise",
-    "frog",
-    "salamander",
-    "lizard",
+    "snake", "crocodile", "alligator", "iguana", "chameleon", "gecko",
+    "komodo dragon", "tortoise", "frog", "salamander", "lizard",
+    "python", "cobra", "rattlesnake", "sea snake", "tree frog",
+    "poison dart frog", "axolotl", "newt", "monitor lizard",
 
     # Animals - insects & arachnids
-    "spider",
-    "tarantula",
-    "scorpion",
-    "bee",
-    "butterfly",
-    "dragonfly",
-    "ant",
-    "beetle",
-    "ladybug",
-    "moth",
-    "firefly",
-    "grasshopper",
-    "caterpillar",
+    "spider", "tarantula", "scorpion", "bee", "butterfly", "dragonfly",
+    "ant", "beetle", "ladybug", "moth", "firefly", "grasshopper",
+    "caterpillar", "praying mantis", "wasp", "hornet", "termite",
+    "centipede", "millipede", "stick insect", "cicada",
 
     # Space & astronomy
-    "galaxy",
-    "nebula",
-    "planet",
-    "moon",
-    "stars",
-    "sun",
-    "eclipse",
-    "meteor",
-    "aurora",
-    "astronaut",
-    "rocket",
-    "satellite",
-    "comet",
-    "asteroid",
-    "milky way",
-    "constellation",
+    "galaxy", "nebula", "planet", "moon", "stars", "sun", "eclipse",
+    "meteor", "aurora", "astronaut", "rocket", "satellite", "comet",
+    "asteroid", "milky way", "constellation", "mars", "jupiter",
+    "saturn rings", "black hole", "supernova", "space station",
+    "telescope", "solar system",
 
     # Nature phenomena
-    "volcano",
-    "lava",
-    "lightning",
-    "tornado",
-    "hurricane",
-    "tsunami",
-    "earthquake",
-    "avalanche",
-    "wildfire",
-    "geyser",
-    "rainbow",
-    "waterfall",
-    "glacier",
-    "iceberg",
+    "volcano", "lava", "lightning", "tornado", "hurricane", "tsunami",
+    "earthquake", "avalanche", "wildfire", "geyser", "rainbow",
+    "waterfall", "glacier", "iceberg", "sinkhole", "sandstorm",
+    "hailstorm", "whirlpool", "tidal wave", "hot spring",
+    "stalactite", "cave",
+
+    # Plants & fungi
+    "venus flytrap", "giant sequoia", "bamboo", "cactus", "bonsai",
+    "mushroom", "kelp", "moss", "orchid", "sunflower", "cherry blossom",
+    "baobab tree", "mangrove", "redwood", "lotus flower", "carnivorous plant",
 
     # Landmarks
-    "eiffel tower",
-    "great wall",
-    "taj mahal",
-    "pyramids",
-    "colosseum",
-    "machu picchu",
-    "statue liberty",
-    "big ben",
-    "burj khalifa",
-    "stonehenge",
-    "grand canyon",
-    "niagara falls",
-    "great barrier reef",
-    "amazon river",
-    "mount everest",
-    "sahara",
-    "antarctica",
-    "yellowstone",
+    "eiffel tower", "great wall", "taj mahal", "pyramids", "colosseum",
+    "machu picchu", "statue liberty", "big ben", "burj khalifa",
+    "stonehenge", "grand canyon", "niagara falls", "great barrier reef",
+    "amazon river", "mount everest", "sahara", "antarctica",
+    "yellowstone", "angkor wat", "petra jordan", "christ redeemer",
+    "golden gate bridge", "mount fuji", "victoria falls", "dead sea",
+    "mariana trench",
 
     # Cities
-    "new york",
-    "tokyo",
-    "dubai",
-    "hong kong",
-    "paris",
-    "london",
-    "singapore",
-    "sydney",
-    "los angeles",
-    "shanghai",
+    "new york", "tokyo", "dubai", "hong kong", "paris", "london",
+    "singapore", "sydney", "los angeles", "shanghai", "rome",
+    "istanbul", "bangkok", "rio de janeiro", "cairo", "moscow",
+    "venice", "amsterdam", "barcelona",
 
     # Science & tech
-    "robot",
-    "circuit",
-    "laboratory",
-    "dna",
-    "cells",
-    "bacteria",
-    "virus",
-    "atom",
-    "crystal",
-    "laser",
-    "hologram",
-    "3d printer",
-    "drone",
-    "solar panel",
-    "wind turbine",
+    "robot", "circuit", "laboratory", "dna", "cells", "bacteria",
+    "virus", "atom", "crystal", "laser", "hologram", "3d printer",
+    "drone", "solar panel", "wind turbine", "microscope", "telescope",
+    "electric car", "nuclear reactor", "particle accelerator",
 
     # Elements & materials
-    "gold",
-    "diamond",
-    "crystal",
-    "gemstone",
-    "mineral",
-    "ice",
-    "fire",
-    "water",
-    "smoke",
-    "sand",
-    "glass",
-    "metal",
+    "gold", "diamond", "crystal", "gemstone", "mineral", "ice", "fire",
+    "water", "smoke", "sand", "glass", "metal", "obsidian", "quartz",
+    "amber", "copper", "iron", "silver", "platinum", "titanium",
+
+    # Food & agriculture
+    "coffee beans", "chocolate", "rice paddy", "vineyard", "beehive",
+    "honey harvest", "tea plantation", "wheat field", "olive grove",
+    "spices", "saffron", "vanilla bean", "sugar cane",
+
+    # Engineering & machines
+    "suspension bridge", "dam", "skyscraper", "tunnel", "crane",
+    "excavator", "train", "submarine", "helicopter", "aircraft carrier",
+    "oil rig", "wind farm", "hydroelectric", "assembly line",
 
     # Weather
-    "storm",
-    "thunder",
-    "rain",
-    "snow",
-    "fog",
-    "clouds",
-    "sunset",
-    "sunrise",
-    "northern lights",
+    "storm", "thunder", "rain", "snow", "fog", "clouds", "sunset",
+    "sunrise", "northern lights", "blizzard", "typhoon", "monsoon",
+    "dust devil", "frost",
+
+    # Ocean & underwater
+    "deep sea", "ocean floor", "coral reef", "underwater cave",
+    "shipwreck", "hydrothermal vent", "kelp forest", "tide pool",
 ]
 
 # Words that indicate vague/unclear descriptions - skip these videos
@@ -303,27 +200,56 @@ GOOD_SUBJECT_WORDS = [
     "tarantula", "scorpion", "bee", "butterfly", "dragonfly", "ant",
     "beetle", "ladybug", "moth", "firefly", "grasshopper", "caterpillar",
     "reindeer", "boar", "wild boar",
+    # New animals
+    "platypus", "pangolin", "capybara", "red panda", "armadillo",
+    "porcupine", "hedgehog", "bat", "raccoon", "badger", "weasel",
+    "wolverine", "hyena", "jackal", "bison", "yak", "meerkat", "lemur",
+    "tapir", "manatee", "narwhal", "wombat", "pufferfish", "moray",
+    "barracuda", "swordfish", "tuna", "hammerhead", "whale shark",
+    "nautilus", "sea lion", "hermit crab", "sea urchin", "anglerfish",
+    "parrotfish", "albatross", "ostrich", "condor", "vulture", "robin",
+    "cardinal", "blue jay", "stork", "ibis", "kiwi", "cockatoo", "macaw",
+    "python", "cobra", "rattlesnake", "sea snake", "tree frog",
+    "poison dart", "axolotl", "newt", "monitor lizard", "praying mantis",
+    "wasp", "hornet", "termite", "centipede", "millipede", "stick insect",
+    "cicada",
 
     # Specific places/landmarks
     "eiffel", "pyramids", "colosseum", "taj mahal", "great wall",
     "stonehenge", "machu picchu", "statue of liberty", "big ben",
     "burj khalifa", "grand canyon", "niagara", "everest", "sahara",
-    "amazon", "yellowstone", "barrier reef",
+    "amazon", "yellowstone", "barrier reef", "angkor wat", "petra",
+    "christ redeemer", "golden gate", "mount fuji", "victoria falls",
+    "dead sea", "mariana trench",
 
     # Specific phenomena
     "volcano", "lava", "eruption", "lightning", "tornado", "hurricane",
     "tsunami", "earthquake", "avalanche", "wildfire", "geyser", "aurora",
-    "northern lights", "eclipse", "meteor",
+    "northern lights", "eclipse", "meteor", "sinkhole", "sandstorm",
+    "hailstorm", "whirlpool", "hot spring", "stalactite", "cave",
+    "blizzard", "typhoon", "monsoon",
+
+    # Plants & fungi
+    "venus flytrap", "sequoia", "bamboo", "cactus", "bonsai", "mushroom",
+    "kelp", "orchid", "sunflower", "cherry blossom", "baobab",
+    "mangrove", "redwood", "lotus", "carnivorous plant",
 
     # Specific things with fact potential
-    "diamond", "gold", "crystal", "gemstone", "fossil",
+    "diamond", "gold", "crystal", "gemstone", "fossil", "obsidian",
+    "quartz", "amber", "copper", "iron", "silver", "platinum", "titanium",
     "rocket", "satellite", "astronaut", "space station",
     "microscope", "bacteria", "virus", "cell", "dna",
-    "robot", "drone", "laboratory",
+    "robot", "drone", "laboratory", "telescope",
+    "coffee", "chocolate", "honey", "saffron", "vanilla", "sugar cane",
+    "submarine", "helicopter", "aircraft carrier", "oil rig",
+    "dam", "skyscraper", "tunnel", "bridge",
+    "coral reef", "shipwreck", "hydrothermal", "kelp forest",
+    "black hole", "supernova", "mars", "jupiter", "saturn",
 
     # Cities (can have interesting facts)
     "new york", "tokyo", "dubai", "hong kong", "paris", "london",
-    "singapore", "sydney", "shanghai",
+    "singapore", "sydney", "shanghai", "rome", "istanbul", "bangkok",
+    "rio de janeiro", "cairo", "moscow", "venice", "amsterdam", "barcelona",
 ]
 
 
@@ -344,6 +270,7 @@ class PexelsClient:
         self, query: str, orientation: str = "portrait", per_page: int = 80
     ) -> list[dict]:
         """Search for videos matching query. Fetches many results for variety."""
+        page = random.randint(1, 5)
         response = self.session.get(
             f"{self.BASE_URL}/search",
             params={
@@ -351,6 +278,7 @@ class PexelsClient:
                 "orientation": orientation,
                 "per_page": per_page,
                 "size": "medium",
+                "page": page,
             },
         )
         response.raise_for_status()
@@ -458,10 +386,62 @@ class PexelsClient:
 class VideoFetcher:
     """Fetches viral-worthy videos from stock footage APIs."""
 
-    def __init__(self, pexels_key: str, cache_dir: Path):
+    def __init__(self, pexels_key: str, cache_dir: Path, openai_api_key: str = None):
         self.cache_dir = cache_dir
         self.pexels = PexelsClient(pexels_key, cache_dir) if pexels_key else None
+        self.openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
         self._used_topics = set()  # Track used topics to avoid repeats
+
+    def _get_related_topic(self, original_topic: str) -> str:
+        """Use GPT to generate a related but different search topic.
+
+        Given "tiger", might return "bengal tiger hunting" or "tiger cub".
+        The goal is to find a related subject that will produce an interesting fact
+        and good Pexels results.
+        """
+        if not self.openai_client:
+            return original_topic
+
+        try:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You suggest video search terms. Respond with JSON only."},
+                    {"role": "user", "content": f"""I'm searching for stock video footage about: "{original_topic}"
+
+Instead of searching for that exact term, suggest a RELATED but more specific or interesting search term that:
+1. Is visually related (would show similar footage on a stock video site)
+2. Has potential for a surprising/interesting fact
+3. Is 1-3 words (good for stock video search)
+
+Examples:
+- "shark" -> "hammerhead shark" or "great white" or "shark teeth"
+- "volcano" -> "lava flow" or "volcanic eruption" or "magma"
+- "eagle" -> "bald eagle" or "golden eagle" or "eagle hunting"
+- "diamond" -> "raw diamond" or "diamond mine" or "gemstone"
+- "coral" -> "coral reef" or "brain coral" or "coral bleaching"
+
+Respond with JSON only:
+{{"search_term": "your suggested term"}}"""},
+                ],
+                temperature=1.0,
+                max_tokens=50,
+            )
+
+            content = response.choices[0].message.content
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
+            data = json.loads(content.strip())
+            related = data["search_term"].strip().lower()
+            if related and len(related) < 40:
+                return related
+        except Exception as e:
+            print(f"    GPT related topic failed ({e}), using original")
+
+        return original_topic
 
     def fetch_viral_video(self, min_duration: int = 5, topic: str = None) -> VideoClip:
         """Fetch a video on a viral topic with a good description.
@@ -488,8 +468,17 @@ class VideoFetcher:
 
         for search_term in topics_to_try:
             try:
-                print(f"  Searching for: {search_term}")
-                results = self.pexels.search(search_term)
+                # 75% of the time, ask GPT for a related but more interesting topic
+                actual_search = search_term
+                if self.openai_client and random.random() < 0.75:
+                    actual_search = self._get_related_topic(search_term)
+                    if actual_search != search_term:
+                        print(f"  Searching for: {actual_search} (related to {search_term})")
+                    else:
+                        print(f"  Searching for: {search_term}")
+                else:
+                    print(f"  Searching for: {search_term}")
+                results = self.pexels.search(actual_search)
 
                 # Filter for suitable videos WITH good descriptions
                 suitable = []

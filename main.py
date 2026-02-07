@@ -114,7 +114,7 @@ def generate(topic, duration, no_music, output):
 
     # Step 1: Find a viral video and verify with GPT Vision
     click.echo("1. Finding viral video content...")
-    fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir)
+    fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir, settings.openai_api_key)
     reviewer = VisionReviewer(settings.openai_api_key)
 
     video_clip = None
@@ -287,7 +287,7 @@ def auto(topic, duration, privacy, no_upload):
 
     # Step 1: Find a viral video and verify with GPT Vision
     click.echo("1. Finding viral video content...")
-    fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir)
+    fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir, settings.openai_api_key)
     reviewer = VisionReviewer(settings.openai_api_key)
 
     video_clip = None
