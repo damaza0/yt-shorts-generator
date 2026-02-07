@@ -33,7 +33,7 @@ env:
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Video generation + upload should complete within 15 mins
+    timeout-minutes: 10  # Cancel if video generation + upload takes longer than 10 mins
 
     steps:
       - name: Checkout repository
@@ -72,14 +72,6 @@ jobs:
       - name: Create required directories
         run: |
           mkdir -p cache/videos cache/music output assets/music
-
-      - name: Random delay (0-5 minutes)
-        if: github.event_name == 'schedule'
-        run: |
-          # Random delay between 0 and 300 seconds (5 minutes)
-          DELAY=$((RANDOM % 301))
-          echo "Waiting ${DELAY} seconds before uploading..."
-          sleep $DELAY
 
       - name: Generate and upload video
         env:
