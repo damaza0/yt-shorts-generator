@@ -98,9 +98,8 @@ def check():
 @click.option("--topic", "-t", default=None, help="Video topic (e.g., 'ocean', 'space', 'animals')")
 @click.option("--duration", "-d", default=8, help="Video duration in seconds (default: 8)")
 @click.option("--no-music", is_flag=True, default=False, help="Generate without background music")
-@click.option("--music-dir", "-m", default=None, help="Path to folder with YouTube Audio Library mp3s")
 @click.option("--output", "-o", default=None, help="Output filename")
-def generate(topic, duration, no_music, music_dir, output):
+def generate(topic, duration, no_music, output):
     """Generate a new YouTube Short with a viral fact."""
 
     # Validate configuration
@@ -159,32 +158,11 @@ def generate(topic, duration, no_music, music_dir, output):
     # Step 3: Get music
     music_track = None
     if not no_music:
-        click.echo("\n3. Getting background music...")
-        music_mgr = MusicManager("", settings.music_cache_dir)
-
-        # Determine music folder (custom or default assets/music)
-        music_folder = Path(music_dir) if music_dir else settings.yt_music_dir
-        using_yt_library = False
-
-        # Check for YouTube Audio Library tracks in music folder
-        if music_folder.exists():
-            mp3_files = list(music_folder.glob("*.mp3"))
-            if mp3_files:
-                import random
-                selected_track = random.choice(mp3_files)
-                music_track = music_mgr.get_local_track(selected_track)
-                using_yt_library = True
-                click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
-                click.echo(f"   Source: {click.style('YouTube Audio Library', fg='cyan')}")
-                click.echo(f"   {click.style('✓ Safe for monetization & may auto-tag!', fg='green')}")
-
-        # Fallback to Kevin MacLeod tracks
-        if not using_yt_library:
-            music_track = music_mgr.get_random_track(min_duration=duration)
-            if music_track and music_track.path:
-                click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
-                click.echo(f"   Artist: {music_track.artist}")
-                click.echo(f"   {click.style('TIP: Add trending sounds to assets/music/ for auto-tagging!', fg='yellow')}")
+        click.echo("\n3. Picking background music...")
+        clips_dir = Path(__file__).parent / "clips"
+        music_mgr = MusicManager(clips_dir, settings.openai_api_key)
+        music_track = music_mgr.pick_track(fact.hook, fact.fact_text, fact.category)
+        click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
     else:
         click.echo("\n3. Skipping music (--no-music flag)")
 
@@ -242,10 +220,8 @@ def generate(topic, duration, no_music, music_dir, output):
     click.echo(f"Duration: {duration} seconds")
     click.echo(f"Resolution: {settings.video_width}x{settings.video_height}")
 
-    if music_track and music_track.path:
-        click.echo(f"\n{click.style('Music Credit (for YouTube description):', fg='yellow')}")
-        click.echo(f"  {music_track.title} by {music_track.artist}")
-        click.echo(f"  Source: {music_track.source_url}")
+    if music_track:
+        click.echo(f"\nMusic: {music_track.title}")
 
 
 @cli.command()
@@ -351,28 +327,11 @@ def auto(topic, duration, privacy, no_upload):
     click.echo(f"   Category: {fact.category}")
 
     # Step 3: Get music
-    click.echo("\n3. Getting background music...")
-    music_mgr = MusicManager("", settings.music_cache_dir)
-
-    music_track = None
-    music_credit = ""
-
-    # Check for YouTube Audio Library tracks first
-    if settings.yt_music_dir.exists():
-        mp3_files = list(settings.yt_music_dir.glob("*.mp3"))
-        if mp3_files:
-            import random
-            selected_track = random.choice(mp3_files)
-            music_track = music_mgr.get_local_track(selected_track)
-            music_credit = f"{music_track.title} (YouTube Audio Library)"
-            click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
-
-    # Fallback to Kevin MacLeod tracks
-    if not music_track:
-        music_track = music_mgr.get_random_track(min_duration=duration)
-        if music_track and music_track.path:
-            music_credit = f"{music_track.title} by {music_track.artist} ({music_track.source_url})"
-            click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
+    click.echo("\n3. Picking background music...")
+    clips_dir = Path(__file__).parent / "clips"
+    music_mgr = MusicManager(clips_dir, settings.openai_api_key)
+    music_track = music_mgr.pick_track(fact.hook, fact.fact_text, fact.category)
+    click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
 
     # Step 4: Render text
     click.echo("\n4. Rendering text overlay...")
@@ -462,9 +421,7 @@ def auto(topic, duration, privacy, no_upload):
             click.echo(f"Error: {str(e)}")
             sys.exit(1)
 
-    # Output music credit for reference
-    if music_credit:
-        click.echo(f"\nMusic Credit: {music_credit}")
+    click.echo(f"\nMusic: {music_track.title}")
 
 
 if __name__ == "__main__":

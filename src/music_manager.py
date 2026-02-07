@@ -1,11 +1,12 @@
 """
 Background music management for YouTube Shorts.
-Uses free/open music sources for viral background tracks.
+Picks the best clip from the clips/ folder using GPT to match the video's mood.
 """
-import requests
+import json
 import random
 from pathlib import Path
 from dataclasses import dataclass
+from openai import OpenAI
 
 
 @dataclass
@@ -14,200 +15,78 @@ class MusicTrack:
 
     path: Path
     title: str
-    artist: str
-    duration: int
-    source: str
-    source_url: str
 
 
 class MusicManager:
-    """Manages royalty-free music for YouTube Shorts.
+    """Picks the best music clip for a video from the clips/ folder.
 
-    BEST OPTION FOR TRENDING SOUNDS:
-    1. Go to YouTube Studio > Audio Library (https://studio.youtube.com/channel/UC/music)
-    2. Filter by "Popular" or browse trending tracks
-    3. Download your favorite tracks
-    4. Place them in assets/music/ folder
-    5. Run with: python main.py generate --music-dir assets/music
-
-    Popular trending sounds for Shorts (download these from YouTube Audio Library):
-    - "Blade Runner 2049" by Aakash Gandhi (dramatic)
-    - "Better Days" by NEFFEX (upbeat)
-    - "Cradles" by Sub Urban (viral sound)
-    - "Legends Never Die" by Against The Current (epic)
-    - "Dreams" by Joakim Karud (chill hip-hop)
+    Randomly selects 3 candidates from clips/, then uses GPT to pick
+    the one whose name best matches the fact's mood/category.
     """
 
-    # Royalty-free music from Kevin MacLeod (incompetech.com)
-    # All tracks licensed under Creative Commons: By Attribution 4.0
-    # Dark, dramatic, and mysterious tracks to match disturbing/creepy facts
-    FALLBACK_TRACKS = [
-        # Dark & Creepy
-        {
-            "id": "dark_fog",
-            "title": "Dark Fog",
-            "artist": "Kevin MacLeod",
-            "duration": 180,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dark%20Fog.mp3",
-        },
-        {
-            "id": "danse_macabre",
-            "title": "Danse Macabre",
-            "artist": "Kevin MacLeod",
-            "duration": 150,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Danse%20Macabre.mp3",
-        },
-        {
-            "id": "dark_times",
-            "title": "Dark Times",
-            "artist": "Kevin MacLeod",
-            "duration": 180,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dark%20Times.mp3",
-        },
-        {
-            "id": "nightmare_machine",
-            "title": "Nightmare Machine",
-            "artist": "Kevin MacLeod",
-            "duration": 150,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Nightmare%20Machine.mp3",
-        },
-        # Dramatic & Epic
-        {
-            "id": "epic_unease",
-            "title": "Epic Unease",
-            "artist": "Kevin MacLeod",
-            "duration": 180,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Epic%20Unease.mp3",
-        },
-        {
-            "id": "intrepid",
-            "title": "Intrepid",
-            "artist": "Kevin MacLeod",
-            "duration": 180,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Intrepid.mp3",
-        },
-        {
-            "id": "hitman",
-            "title": "Hitman",
-            "artist": "Kevin MacLeod",
-            "duration": 150,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hitman.mp3",
-        },
-        # Mysterious & Suspenseful
-        {
-            "id": "investigations",
-            "title": "Investigations",
-            "artist": "Kevin MacLeod",
-            "duration": 180,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Investigations.mp3",
-        },
-        {
-            "id": "cipher2",
-            "title": "Cipher2",
-            "artist": "Kevin MacLeod",
-            "duration": 150,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cipher2.mp3",
-        },
-        {
-            "id": "oppressive_gloom",
-            "title": "Oppressive Gloom",
-            "artist": "Kevin MacLeod",
-            "duration": 150,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Oppressive%20Gloom.mp3",
-        },
-        # Intense & Ominous
-        {
-            "id": "volatile_reaction",
-            "title": "Volatile Reaction",
-            "artist": "Kevin MacLeod",
-            "duration": 180,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Volatile%20Reaction.mp3",
-        },
-        {
-            "id": "aggressor",
-            "title": "Aggressor",
-            "artist": "Kevin MacLeod",
-            "duration": 150,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Aggressor.mp3",
-        },
-        {
-            "id": "heart_of_nowhere",
-            "title": "Heart of Nowhere",
-            "artist": "Kevin MacLeod",
-            "duration": 200,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Heart%20of%20Nowhere.mp3",
-        },
-        # Atmospheric & Eerie
-        {
-            "id": "ossuary_6_air",
-            "title": "Ossuary 6 - Air",
-            "artist": "Kevin MacLeod",
-            "duration": 180,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ossuary%206%20-%20Air.mp3",
-        },
-        {
-            "id": "ghost_story",
-            "title": "Ghost Story",
-            "artist": "Kevin MacLeod",
-            "duration": 180,
-            "url": "https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ghost%20Story.mp3",
-        },
-    ]
+    def __init__(self, clips_dir: Path, openai_api_key: str):
+        self.clips_dir = clips_dir
+        self.client = OpenAI(api_key=openai_api_key)
 
-    def __init__(self, api_key: str, cache_dir: Path):
-        self.cache_dir = cache_dir
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+    def pick_track(self, hook: str, fact_text: str, category: str) -> MusicTrack:
+        """Pick the best music track for this fact.
 
-    def get_random_track(self, min_duration: int = 10) -> MusicTrack:
-        """Get a random music track from fallback library."""
-        # Use Kevin MacLeod tracks (guaranteed to work, monetization-safe)
-        # User should download YouTube Audio Library tracks manually for auto-tagging
-        suitable = [t for t in self.FALLBACK_TRACKS if t["duration"] >= min_duration]
-        if not suitable:
-            suitable = self.FALLBACK_TRACKS
+        Randomly samples 3 clips, asks GPT which name fits best,
+        and returns that track.
+        """
+        all_clips = list(self.clips_dir.glob("*.mp3"))
+        if not all_clips:
+            raise FileNotFoundError(f"No mp3 files found in {self.clips_dir}")
 
-        # Pick random track
-        track_data = random.choice(suitable)
-        cache_path = self.cache_dir / f"music_{track_data['id']}.mp3"
+        # Pick 3 random candidates (or fewer if less than 3 available)
+        candidates = random.sample(all_clips, min(3, len(all_clips)))
 
-        if not cache_path.exists():
-            print(f"    Downloading music: {track_data['title']}...")
-            try:
-                headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
-                response = requests.get(track_data["url"], stream=True, timeout=30, headers=headers)
-                response.raise_for_status()
-                with open(cache_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-            except Exception as e:
-                print(f"    Warning: Could not download music: {e}")
-                cache_path = None
-        else:
-            print(f"    Using cached music: {track_data['title']}")
+        # If only 1 clip, just return it
+        if len(candidates) == 1:
+            return MusicTrack(path=candidates[0], title=candidates[0].stem)
 
-        return MusicTrack(
-            path=cache_path,
-            title=track_data["title"],
-            artist=track_data["artist"],
-            duration=track_data["duration"],
-            source="Kevin MacLeod (incompetech.com)",
-            source_url="https://incompetech.com",
-        )
+        # Ask GPT which track name fits the mood best
+        track_names = [c.stem for c in candidates]
+        prompt = f"""I'm making a YouTube Short with this content:
 
-    def get_local_track(self, track_path: Path) -> MusicTrack:
-        """Use a locally downloaded track (e.g., from YouTube Audio Library)."""
-        if not track_path.exists():
-            raise FileNotFoundError(f"Track not found: {track_path}")
+Hook: {hook}
+Fact: {fact_text}
+Category: {category}
 
-        return MusicTrack(
-            path=track_path,
-            title=track_path.stem,  # Use filename as title
-            artist="YouTube Audio Library",
-            duration=300,  # Placeholder
-            source="YouTube Audio Library",
-            source_url="https://studio.youtube.com/channel/UC/music",
-        )
+Which background music track fits the mood best? Pick ONE.
 
-    def get_track_info_for_youtube(self, track: MusicTrack) -> str:
-        """Get formatted track info for YouTube description."""
-        return f"Music: {track.title} by {track.artist} (from {track.source_url})"
+Options:
+{chr(10).join(f'{i}. {name}' for i, name in enumerate(track_names))}
+
+Respond with JSON only:
+{{"best_index": 0, "reason": "brief reason"}}"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You pick background music for short videos. Respond with JSON only."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=100,
+            )
+
+            content = response.choices[0].message.content
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
+            data = json.loads(content.strip())
+            idx = data["best_index"]
+            if 0 <= idx < len(candidates):
+                chosen = candidates[idx]
+                print(f"    GPT picked: {chosen.stem} — {data.get('reason', '')}")
+                return MusicTrack(path=chosen, title=chosen.stem)
+        except Exception as e:
+            print(f"    GPT music selection failed ({e}), picking randomly")
+
+        # Fallback: random pick
+        chosen = random.choice(candidates)
+        return MusicTrack(path=chosen, title=chosen.stem)
