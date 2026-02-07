@@ -245,10 +245,12 @@ class TextRenderer:
 
             for word in words:
                 # Check if this word should be highlighted (case-insensitive)
+                # Never highlight words less than 3 letters long
                 word_lower = word.lower().strip(".,!?;:'\"")
-                should_highlight = any(
-                    hw.lower() in word_lower or word_lower in hw.lower()
+                should_highlight = len(word_lower) >= 3 and any(
+                    hw.lower() == word_lower or hw.lower() in word_lower or word_lower in hw.lower()
                     for hw in highlight_words
+                    if len(hw) >= 3
                 )
 
                 color = self.highlight_color if should_highlight else self.text_color

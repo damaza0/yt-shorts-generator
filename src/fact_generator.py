@@ -179,7 +179,7 @@ You MUST respond with valid JSON only:
         return GeneratedFact(
             hook=self._clean_text(data["hook"]),
             fact_text=self._clean_text(data["fact_text"]),
-            highlight_words=data["highlight_words"],
+            highlight_words=[w for w in data["highlight_words"] if len(w) > 2],
             category=data["category"],
         )
 
@@ -300,6 +300,6 @@ Respond with JSON only:
         return GeneratedFact(
             hook=self._clean_text(data["hook"]),
             fact_text=self._clean_text(data["fact_text"]),
-            highlight_words=data["highlight_words"],
+            highlight_words=[w for w in data["highlight_words"] if len(w) > 2],
             category=data["category"],
         )

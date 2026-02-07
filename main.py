@@ -19,6 +19,7 @@ from src.video_fetcher import VideoFetcher
 from src.text_renderer import TextRenderer
 from src.music_manager import MusicManager
 from src.video_composer import VideoComposer
+from src.vision_reviewer import VisionReviewer
 
 
 @click.group()
@@ -112,11 +113,37 @@ def generate(topic, duration, no_music, music_dir, output):
 
     click.echo(click.style("\n=== YouTube Shorts Generator ===\n", fg="cyan", bold=True))
 
-    # Step 1: Find a viral video FIRST
+    # Step 1: Find a viral video and verify with GPT Vision
     click.echo("1. Finding viral video content...")
     fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir)
-    video_clip = fetcher.fetch_viral_video(min_duration=duration, topic=topic)
-    click.echo(f"   Found: {click.style(video_clip.description, fg='cyan')} ({video_clip.duration}s)")
+    reviewer = VisionReviewer(settings.openai_api_key)
+
+    video_clip = None
+    vision_result = None
+    for attempt in range(5):
+        candidate = fetcher.fetch_viral_video(min_duration=duration, topic=topic)
+        click.echo(f"   Candidate: {click.style(candidate.description, fg='cyan')} ({candidate.duration}s)")
+
+        click.echo("   Verifying with GPT Vision...")
+        result = reviewer.verify_video_content(candidate.path, candidate.description)
+
+        if result.approved:
+            video_clip = candidate
+            vision_result = result
+            click.echo(f"   {click.style('APPROVED', fg='green')} - {result.explanation[:60]}")
+            break
+        else:
+            click.echo(f"   {click.style('REJECTED', fg='red')} - {result.explanation[:60]}")
+            click.echo(f"   Trying another video... (attempt {attempt + 1}/5)")
+
+    if not video_clip:
+        click.echo(click.style("Could not find a verified video after 5 attempts.", fg="red"))
+        return
+
+    # Calculate best start time and crop position from vision analysis
+    start_time = reviewer.get_best_start_time(vision_result)
+    subject_position = vision_result.subject_position
+    click.echo(f"   Smart crop: start at {start_time:.1f}s, subject at {subject_position}")
 
     # Step 2: Generate fact that MATCHES the video
     click.echo("\n2. Generating matching viral fact...")
@@ -200,7 +227,10 @@ def generate(topic, duration, no_music, music_dir, output):
         output_path = settings.output_dir / f"short_{safe_category}_{timestamp}.mp4"
 
     music_path = music_track.path if music_track else None
-    composer.compose(text_image_path, video_clip.path, output_path, music_path)
+    composer.compose(
+        text_image_path, video_clip.path, output_path, music_path,
+        start_time=start_time, subject_position=subject_position,
+    )
 
     # Cleanup temp files
     if text_image_path.exists():
@@ -279,11 +309,37 @@ def auto(topic, duration, privacy, no_upload):
 
     click.echo(click.style("\n=== YouTube Shorts Auto Generator ===\n", fg="cyan", bold=True))
 
-    # Step 1: Find a viral video
+    # Step 1: Find a viral video and verify with GPT Vision
     click.echo("1. Finding viral video content...")
     fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir)
-    video_clip = fetcher.fetch_viral_video(min_duration=duration, topic=topic)
-    click.echo(f"   Found: {click.style(video_clip.description, fg='cyan')} ({video_clip.duration}s)")
+    reviewer = VisionReviewer(settings.openai_api_key)
+
+    video_clip = None
+    vision_result = None
+    for attempt in range(5):
+        candidate = fetcher.fetch_viral_video(min_duration=duration, topic=topic)
+        click.echo(f"   Candidate: {click.style(candidate.description, fg='cyan')} ({candidate.duration}s)")
+
+        click.echo("   Verifying with GPT Vision...")
+        result = reviewer.verify_video_content(candidate.path, candidate.description)
+
+        if result.approved:
+            video_clip = candidate
+            vision_result = result
+            click.echo(f"   {click.style('APPROVED', fg='green')} - {result.explanation[:60]}")
+            break
+        else:
+            click.echo(f"   {click.style('REJECTED', fg='red')} - {result.explanation[:60]}")
+            click.echo(f"   Trying another video... (attempt {attempt + 1}/5)")
+
+    if not video_clip:
+        click.echo(click.style("Could not find a verified video after 5 attempts.", fg="red"))
+        sys.exit(1)
+
+    # Calculate best start time and crop position from vision analysis
+    start_time = reviewer.get_best_start_time(vision_result)
+    subject_position = vision_result.subject_position
+    click.echo(f"   Smart crop: start at {start_time:.1f}s, subject at {subject_position}")
 
     # Step 2: Generate fact that matches the video
     click.echo("\n2. Generating matching viral fact...")
@@ -348,7 +404,10 @@ def auto(topic, duration, privacy, no_upload):
     output_path = settings.output_dir / f"short_{safe_category}_{timestamp}.mp4"
 
     music_path = music_track.path if music_track else None
-    composer.compose(text_image_path, video_clip.path, output_path, music_path)
+    composer.compose(
+        text_image_path, video_clip.path, output_path, music_path,
+        start_time=start_time, subject_position=subject_position,
+    )
 
     # Cleanup temp files
     if text_image_path.exists():

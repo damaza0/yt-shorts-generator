@@ -10,6 +10,7 @@ from moviepy import (
     CompositeVideoClip,
     concatenate_videoclips,
 )
+from moviepy.audio.fx import MultiplyVolume
 import numpy as np
 
 
@@ -38,8 +39,16 @@ class VideoComposer:
         video_clip_path: Path,
         output_path: Path,
         music_path: Path = None,
+        start_time: float = 0.0,
+        subject_position: str = "center",
     ) -> Path:
-        """Compose final video with text on top, video on bottom, and music."""
+        """Compose final video with text on top, video on bottom, and music.
+
+        Args:
+            start_time: Where to start playing the source video (seconds).
+            subject_position: "top", "center", or "bottom" — adjusts vertical crop
+                              to keep the subject visible in the 750px window.
+        """
 
         # Create black background
         bg_array = np.zeros((self.height, self.width, 3), dtype=np.uint8)
@@ -55,7 +64,7 @@ class VideoComposer:
 
         # Load and prepare video clip (below text, with bottom padding)
         video_clip = VideoFileClip(str(video_clip_path))
-        video_clip = self._prepare_video_clip(video_clip)
+        video_clip = self._prepare_video_clip(video_clip, start_time, subject_position)
         # Position video below text area, leaving padding at bottom
         video_y = self.text_height
         video_clip = video_clip.with_position(("center", video_y))
@@ -74,6 +83,8 @@ class VideoComposer:
                 # Trim audio to match video duration
                 if audio.duration > self.duration:
                     audio = audio.subclipped(0, self.duration)
+                # Boost music volume (3x louder)
+                audio = audio.with_effects([MultiplyVolume(3.0)])
                 final = final.with_audio(audio)
             except Exception as e:
                 print(f"    Warning: Could not add music: {e}")
@@ -101,10 +112,27 @@ class VideoComposer:
 
         return output_path
 
-    def _prepare_video_clip(self, clip: VideoFileClip) -> VideoFileClip:
-        """Resize and crop video to fit video area exactly (no letterboxing)."""
+    def _prepare_video_clip(
+        self,
+        clip: VideoFileClip,
+        start_time: float = 0.0,
+        subject_position: str = "center",
+    ) -> VideoFileClip:
+        """Resize and crop video to fit video area exactly (no letterboxing).
+
+        Uses start_time to pick the best segment and subject_position to
+        shift the vertical crop so the subject stays visible.
+        """
         target_width = self.width  # 1080
         target_height = self.video_height  # 750
+
+        # --- Temporal: pick the best segment ---
+        # If video is long enough, start from the best timestamp
+        if start_time > 0 and clip.duration > self.duration:
+            # Make sure we don't go past the end
+            max_start = clip.duration - self.duration
+            actual_start = min(start_time, max_start)
+            clip = clip.subclipped(actual_start, actual_start + self.duration)
 
         # Calculate scaling to COVER target area (scale up to fill, then crop)
         scale_w = target_width / clip.w
@@ -114,14 +142,25 @@ class VideoComposer:
         # Resize to cover
         clip = clip.resized(scale)
 
-        # Force exact dimensions by center cropping
-        # Calculate crop coordinates to center the video
-        x1 = int((clip.w - target_width) / 2)
-        y1 = int((clip.h - target_height) / 2)
+        # --- Spatial: shift vertical crop based on subject position ---
+        # How much vertical excess do we have after scaling?
+        excess_y = clip.h - target_height
 
-        # Ensure non-negative coordinates
-        x1 = max(0, x1)
-        y1 = max(0, y1)
+        if excess_y <= 0:
+            # No excess — video fits exactly or is too small, center it
+            y1 = 0
+        elif subject_position == "top":
+            # Subject is in top third — crop from the top (show top of frame)
+            y1 = 0
+        elif subject_position == "bottom":
+            # Subject is in bottom third — crop from the bottom (show bottom of frame)
+            y1 = excess_y
+        else:
+            # Center (default) — crop equally from top and bottom
+            y1 = excess_y // 2
+
+        x1 = max(0, int((clip.w - target_width) / 2))
+        y1 = max(0, int(y1))
 
         clip = clip.cropped(
             x1=x1,
