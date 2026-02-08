@@ -4,6 +4,8 @@ openai>=1.0.0
 requests>=2.31.0
 python-dotenv>=1.0.0
 click>=8.1.0
+ddgs>=9.0.0
+ultralytics>=8.0.0
 
 # YouTube upload (for auto command)
 google-api-python-client>=2.100.0

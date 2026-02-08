@@ -112,48 +112,70 @@ def generate(topic, duration, no_music, output):
 
     click.echo(click.style("\n=== YouTube Shorts Generator ===\n", fg="cyan", bold=True))
 
-    # Step 1: Find a viral video and verify with GPT Vision
-    click.echo("1. Finding viral video content...")
+    MIN_INTEREST_SCORE = 8
+    MAX_TOPIC_ATTEMPTS = 5
+
     fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir, settings.openai_api_key)
     reviewer = VisionReviewer(settings.openai_api_key)
+    fact_gen = FactGenerator(settings.openai_api_key)
 
     video_clip = None
     vision_result = None
-    for attempt in range(5):
-        candidate = fetcher.fetch_viral_video(min_duration=duration, topic=topic)
-        click.echo(f"   Candidate: {click.style(candidate.description, fg='cyan')} ({candidate.duration}s)")
+    fact = None
+    start_time = 0
 
-        click.echo("   Verifying with GPT Vision...")
-        result = reviewer.verify_video_content(candidate.path, candidate.description)
+    for topic_attempt in range(MAX_TOPIC_ATTEMPTS):
+        if topic_attempt > 0:
+            click.echo(click.style(f"\n--- Restarting with new topic (attempt {topic_attempt + 1}/{MAX_TOPIC_ATTEMPTS}) ---\n", fg="yellow"))
 
-        if result.approved:
-            video_clip = candidate
-            vision_result = result
-            click.echo(f"   {click.style('APPROVED', fg='green')} - {result.explanation[:60]}")
+        # Step 1: Find a viral video and verify with GPT Vision
+        click.echo("1. Finding viral video content...")
+        video_clip = None
+        vision_result = None
+        for attempt in range(5):
+            candidate = fetcher.fetch_viral_video(min_duration=duration, topic=topic)
+            click.echo(f"   Candidate: {click.style(candidate.description, fg='cyan')} ({candidate.duration}s)")
+
+            click.echo("   Verifying with GPT Vision...")
+            result = reviewer.verify_video_content(candidate.path, candidate.description)
+
+            if result.approved:
+                video_clip = candidate
+                vision_result = result
+                click.echo(f"   {click.style('APPROVED', fg='green')} - {result.explanation[:60]}")
+                break
+            else:
+                click.echo(f"   {click.style('REJECTED', fg='red')} - {result.explanation[:60]}")
+                click.echo(f"   Trying another video... (attempt {attempt + 1}/5)")
+
+        if not video_clip:
+            click.echo(click.style("Could not find a verified video, trying new topic...", fg="red"))
+            continue
+
+        # Calculate best start time from vision analysis
+        start_time = reviewer.get_best_start_time(vision_result)
+        click.echo(f"   Best start time: {start_time:.1f}s")
+
+        # Step 2: Search web for interesting facts and pick one
+        click.echo("\n2. Searching for interesting facts...")
+        fact = fact_gen.generate_for_video(video_clip.description)
+
+        click.echo(f"   Hook: {click.style(fact.hook, fg='yellow')}")
+        click.echo(f"   Fact: {fact.fact_text}")
+        click.echo(f"   Highlights: {', '.join(fact.highlight_words)}")
+        click.echo(f"   Category: {fact.category}")
+        click.echo(f"   Interest score: {click.style(str(fact.interest_score) + '/10', fg='yellow' if fact.interest_score >= MIN_INTEREST_SCORE else 'red')}")
+
+        if fact.interest_score >= MIN_INTEREST_SCORE:
+            click.echo(click.style(f"   Interesting enough! (score {fact.interest_score}/10)", fg="green"))
             break
         else:
-            click.echo(f"   {click.style('REJECTED', fg='red')} - {result.explanation[:60]}")
-            click.echo(f"   Trying another video... (attempt {attempt + 1}/5)")
+            click.echo(click.style(f"   Not interesting enough (score {fact.interest_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
+            fact = None
 
-    if not video_clip:
-        click.echo(click.style("Could not find a verified video after 5 attempts.", fg="red"))
+    if not video_clip or not fact:
+        click.echo(click.style(f"Could not find an interesting enough fact after {MAX_TOPIC_ATTEMPTS} topics.", fg="red"))
         return
-
-    # Calculate best start time and crop position from vision analysis
-    start_time = reviewer.get_best_start_time(vision_result)
-    subject_position = vision_result.subject_position
-    click.echo(f"   Smart crop: start at {start_time:.1f}s, subject at {subject_position}")
-
-    # Step 2: Generate fact that MATCHES the video
-    click.echo("\n2. Generating matching viral fact...")
-    fact_gen = FactGenerator(settings.openai_api_key)
-    # Use the description (not search_term) - this is the exact description of what the video shows
-    fact = fact_gen.generate_for_video(video_clip.description)
-
-    click.echo(f"   Hook: {click.style(fact.hook, fg='yellow')}")
-    click.echo(f"   Fact: {fact.fact_text}")
-    click.echo(f"   Highlights: {', '.join(fact.highlight_words)}")
-    click.echo(f"   Category: {fact.category}")
 
     # Step 3: Get music
     music_track = None
@@ -189,7 +211,7 @@ def generate(topic, duration, no_music, output):
     renderer.render(fact.hook, fact.fact_text, fact.highlight_words, text_image_path)
     click.echo("   Text image created")
 
-    # Step 5: Compose video
+    # Step 5: Compose video (YOLO auto-centers subject)
     click.echo("\n5. Composing final video...")
     composer = VideoComposer(
         width=settings.video_width,
@@ -207,7 +229,7 @@ def generate(topic, duration, no_music, output):
     music_path = music_track.path if music_track else None
     composer.compose(
         text_image_path, video_clip.path, output_path, music_path,
-        start_time=start_time, subject_position=subject_position,
+        start_time=start_time,
     )
 
     # Cleanup temp files
@@ -285,46 +307,69 @@ def auto(topic, duration, privacy, no_upload):
 
     click.echo(click.style("\n=== YouTube Shorts Auto Generator ===\n", fg="cyan", bold=True))
 
-    # Step 1: Find a viral video and verify with GPT Vision
-    click.echo("1. Finding viral video content...")
+    MIN_INTEREST_SCORE = 8
+    MAX_TOPIC_ATTEMPTS = 5
+
     fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir, settings.openai_api_key)
     reviewer = VisionReviewer(settings.openai_api_key)
+    fact_gen = FactGenerator(settings.openai_api_key)
 
     video_clip = None
     vision_result = None
-    for attempt in range(5):
-        candidate = fetcher.fetch_viral_video(min_duration=duration, topic=topic)
-        click.echo(f"   Candidate: {click.style(candidate.description, fg='cyan')} ({candidate.duration}s)")
+    fact = None
+    start_time = 0
 
-        click.echo("   Verifying with GPT Vision...")
-        result = reviewer.verify_video_content(candidate.path, candidate.description)
+    for topic_attempt in range(MAX_TOPIC_ATTEMPTS):
+        if topic_attempt > 0:
+            click.echo(click.style(f"\n--- Restarting with new topic (attempt {topic_attempt + 1}/{MAX_TOPIC_ATTEMPTS}) ---\n", fg="yellow"))
 
-        if result.approved:
-            video_clip = candidate
-            vision_result = result
-            click.echo(f"   {click.style('APPROVED', fg='green')} - {result.explanation[:60]}")
+        # Step 1: Find a viral video and verify with GPT Vision
+        click.echo("1. Finding viral video content...")
+        video_clip = None
+        vision_result = None
+        for attempt in range(5):
+            candidate = fetcher.fetch_viral_video(min_duration=duration, topic=topic)
+            click.echo(f"   Candidate: {click.style(candidate.description, fg='cyan')} ({candidate.duration}s)")
+
+            click.echo("   Verifying with GPT Vision...")
+            result = reviewer.verify_video_content(candidate.path, candidate.description)
+
+            if result.approved:
+                video_clip = candidate
+                vision_result = result
+                click.echo(f"   {click.style('APPROVED', fg='green')} - {result.explanation[:60]}")
+                break
+            else:
+                click.echo(f"   {click.style('REJECTED', fg='red')} - {result.explanation[:60]}")
+                click.echo(f"   Trying another video... (attempt {attempt + 1}/5)")
+
+        if not video_clip:
+            click.echo(click.style("Could not find a verified video, trying new topic...", fg="red"))
+            continue
+
+        # Calculate best start time from vision analysis
+        start_time = reviewer.get_best_start_time(vision_result)
+        click.echo(f"   Best start time: {start_time:.1f}s")
+
+        # Step 2: Search web for interesting facts and pick one
+        click.echo("\n2. Searching for interesting facts...")
+        fact = fact_gen.generate_for_video(video_clip.description)
+
+        click.echo(f"   Hook: {click.style(fact.hook, fg='yellow')}")
+        click.echo(f"   Fact: {fact.fact_text}")
+        click.echo(f"   Category: {fact.category}")
+        click.echo(f"   Interest score: {click.style(str(fact.interest_score) + '/10', fg='yellow' if fact.interest_score >= MIN_INTEREST_SCORE else 'red')}")
+
+        if fact.interest_score >= MIN_INTEREST_SCORE:
+            click.echo(click.style(f"   Interesting enough! (score {fact.interest_score}/10)", fg="green"))
             break
         else:
-            click.echo(f"   {click.style('REJECTED', fg='red')} - {result.explanation[:60]}")
-            click.echo(f"   Trying another video... (attempt {attempt + 1}/5)")
+            click.echo(click.style(f"   Not interesting enough (score {fact.interest_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
+            fact = None
 
-    if not video_clip:
-        click.echo(click.style("Could not find a verified video after 5 attempts.", fg="red"))
+    if not video_clip or not fact:
+        click.echo(click.style(f"Could not find an interesting enough fact after {MAX_TOPIC_ATTEMPTS} topics.", fg="red"))
         sys.exit(1)
-
-    # Calculate best start time and crop position from vision analysis
-    start_time = reviewer.get_best_start_time(vision_result)
-    subject_position = vision_result.subject_position
-    click.echo(f"   Smart crop: start at {start_time:.1f}s, subject at {subject_position}")
-
-    # Step 2: Generate fact that matches the video
-    click.echo("\n2. Generating matching viral fact...")
-    fact_gen = FactGenerator(settings.openai_api_key)
-    fact = fact_gen.generate_for_video(video_clip.description)
-
-    click.echo(f"   Hook: {click.style(fact.hook, fg='yellow')}")
-    click.echo(f"   Fact: {fact.fact_text}")
-    click.echo(f"   Category: {fact.category}")
 
     # Step 3: Get music
     click.echo("\n3. Picking background music...")
@@ -351,7 +396,7 @@ def auto(topic, duration, privacy, no_upload):
     renderer.render(fact.hook, fact.fact_text, fact.highlight_words, text_image_path)
     click.echo("   Text image created")
 
-    # Step 5: Compose video
+    # Step 5: Compose video (YOLO auto-centers subject)
     click.echo("\n5. Composing final video...")
     composer = VideoComposer(
         width=settings.video_width,
@@ -365,7 +410,7 @@ def auto(topic, duration, privacy, no_upload):
     music_path = music_track.path if music_track else None
     composer.compose(
         text_image_path, video_clip.path, output_path, music_path,
-        start_time=start_time, subject_position=subject_position,
+        start_time=start_time,
     )
 
     # Cleanup temp files

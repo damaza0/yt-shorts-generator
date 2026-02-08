@@ -18,7 +18,6 @@ class VisionVerification:
     approved: bool
     explanation: str
     best_frame: int = 1  # Which frame (1-based) shows subject most clearly
-    subject_position: str = "center"  # "top", "center", or "bottom" — where the subject is vertically
     video_duration: float = 0.0  # Total duration of source video
 
 
@@ -90,16 +89,16 @@ class VisionReviewer:
                     f"Here are {len(frames)} evenly-spaced frames from the video (frame 1 is earliest, frame {len(frames)} is latest).\n\n"
                     "Answer these questions:\n"
                     "1. Does the video actually show what the description says? (matches: true/false)\n"
+                    "   IMPORTANT: If the description mentions an animal, creature, or living thing, "
+                    "the video MUST show the REAL, LIVING version — NOT a statue, fountain, sculpture, "
+                    "toy, painting, decoration, logo, stuffed animal, or any artificial representation. "
+                    "If you see a fake/artificial version instead of the real thing, set matches to FALSE.\n"
                     "2. Which frame number shows the subject MOST clearly? (best_frame: 1-6)\n"
-                    "3. Where is the subject positioned vertically in most frames? "
-                    "Look at where the main subject sits: top third, center, or bottom third of the frame. "
-                    "(subject_position: \"top\", \"center\", or \"bottom\")\n"
-                    "4. Brief explanation of what you see.\n\n"
+                    "3. Brief explanation of what you see.\n\n"
                     "Respond with JSON only:\n"
                     "{\n"
                     '  "matches": true/false,\n'
                     '  "best_frame": 1-6,\n'
-                    '  "subject_position": "top" or "center" or "bottom",\n'
                     '  "explanation": "what you see"\n'
                     "}"
                 ),
@@ -141,21 +140,15 @@ class VisionReviewer:
         approved = data.get("matches", False)
         explanation = data.get("explanation", "")
         best_frame = data.get("best_frame", 1)
-        subject_position = data.get("subject_position", "center")
-
-        # Validate subject_position
-        if subject_position not in ("top", "center", "bottom"):
-            subject_position = "center"
 
         print(f"    Vision result: {'APPROVED' if approved else 'REJECTED'} - {explanation[:80]}")
         if approved:
-            print(f"    Best frame: {best_frame}/{len(frames)}, Subject position: {subject_position}")
+            print(f"    Best frame: {best_frame}/{len(frames)}")
 
         return VisionVerification(
             approved=approved,
             explanation=explanation,
             best_frame=best_frame,
-            subject_position=subject_position,
             video_duration=duration,
         )
 

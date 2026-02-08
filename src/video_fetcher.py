@@ -1,8 +1,10 @@
 """
 Stock video fetching from Pexels API.
 Downloads vertical/portrait videos for viral content.
-Uses URL-based descriptions for accurate fact matching.
+Uses GPT to evaluate video descriptions for quality and fact potential.
 """
+from __future__ import annotations
+
 import json
 import requests
 import random
@@ -27,7 +29,6 @@ class VideoClip:
 
 
 # Search topics - focus on SPECIFIC subjects that have interesting fact potential
-# Generic scenery searches removed because they return boring videos
 VIRAL_TOPICS = [
     # Animals - mammals
     "lion", "tiger", "elephant", "wolf", "bear", "fox", "deer", "horse",
@@ -131,133 +132,11 @@ VIRAL_TOPICS = [
     "shipwreck", "hydrothermal vent", "kelp forest", "tide pool",
 ]
 
-# Words that indicate vague/unclear descriptions - skip these videos
-VAGUE_WORDS = [
-    # People-related (we want nature/science, not people)
-    "person", "people", "man", "woman", "women", "men", "boy", "girl", "child", "kid",
-    "someone", "couple", "group", "team", "worker", "employee", "staff",
-    "model", "athlete", "player", "dancer", "singer", "actor",
-    "young", "old", "elderly", "adult", "teen", "teenager",
-    "friend", "friends", "family", "tourist", "tourists", "visitor",
-    "teacher", "student", "students", "class", "classroom", "school",
-    "doctor", "nurse", "patient", "chef", "waiter", "customer",
-
-    # Actions that indicate focus on humans
-    "preparing", "cooking", "eating", "drinking", "holding", "using",
-    "making", "doing", "working", "sitting", "standing", "walking",
-    "running", "talking", "looking", "watching", "reading", "writing",
-    "typing", "playing", "dancing", "singing", "shopping", "driving",
-
-    # Body parts
-    "hand", "hands", "finger", "fingers", "face", "head", "body",
-    "arm", "leg", "foot", "feet", "eye", "eyes",
-
-    # Generic/unclear descriptors
-    "view of", "shot of", "footage of", "video of", "photo of",
-    "close up of a", "image of", "picture of", "scene of",
-    "beautiful", "amazing", "stunning", "gorgeous", "lovely",
-    "nice", "good", "great", "best", "top",
-
-    # Indoor/office settings (usually boring)
-    "office", "desk", "computer", "laptop", "phone", "screen",
-    "meeting", "conference", "presentation", "interview",
-    "room", "house", "home", "apartment", "building interior",
-
-    # Fashion/lifestyle (not viral fact content)
-    "fashion", "clothes", "dress", "suit", "outfit", "style",
-    "makeup", "beauty", "hair", "salon", "spa",
-
-    # Stock footage clichés
-    "business", "corporate", "professional", "success", "teamwork",
-    "handshake", "celebration", "party", "wedding", "birthday",
-
-    # Generic nature/scenery with no interesting fact potential
-    "sunset", "sunrise", "serene", "tranquil", "peaceful", "calm",
-    "scenic", "landscape", "waves", "clouds", "sky", "horizon",
-    "leaves", "grass", "field", "meadow", "hillside",
-    "raindrops", "droplets", "dew", "mist", "fog",
-    "winter wonderland", "snowy landscape", "snow covered",
-    "star on", "decoration", "decorative", "ornament",
-    "abstract", "background", "texture", "pattern",
-    "generic", "stock", "b-roll",
-]
-
-# Words that indicate the video has a SPECIFIC subject worth making a fact about
-# Video must contain at least one of these to be selected
-GOOD_SUBJECT_WORDS = [
-    # Specific animals
-    "lion", "tiger", "elephant", "wolf", "bear", "fox", "deer", "horse",
-    "gorilla", "cheetah", "leopard", "giraffe", "zebra", "rhino", "hippo",
-    "kangaroo", "koala", "panda", "monkey", "chimpanzee", "orangutan",
-    "sloth", "otter", "seal", "walrus", "polar bear", "buffalo", "moose",
-    "camel", "shark", "dolphin", "whale", "octopus", "jellyfish", "turtle",
-    "manta", "stingray", "seahorse", "clownfish", "orca", "squid", "crab",
-    "lobster", "starfish", "coral", "eagle", "owl", "parrot", "hummingbird",
-    "peacock", "flamingo", "penguin", "hawk", "falcon", "toucan", "pelican",
-    "swan", "crane", "heron", "kingfisher", "woodpecker", "crow", "raven",
-    "snake", "crocodile", "alligator", "iguana", "chameleon", "gecko",
-    "komodo", "tortoise", "frog", "salamander", "lizard", "spider",
-    "tarantula", "scorpion", "bee", "butterfly", "dragonfly", "ant",
-    "beetle", "ladybug", "moth", "firefly", "grasshopper", "caterpillar",
-    "reindeer", "boar", "wild boar",
-    # New animals
-    "platypus", "pangolin", "capybara", "red panda", "armadillo",
-    "porcupine", "hedgehog", "bat", "raccoon", "badger", "weasel",
-    "wolverine", "hyena", "jackal", "bison", "yak", "meerkat", "lemur",
-    "tapir", "manatee", "narwhal", "wombat", "pufferfish", "moray",
-    "barracuda", "swordfish", "tuna", "hammerhead", "whale shark",
-    "nautilus", "sea lion", "hermit crab", "sea urchin", "anglerfish",
-    "parrotfish", "albatross", "ostrich", "condor", "vulture", "robin",
-    "cardinal", "blue jay", "stork", "ibis", "kiwi", "cockatoo", "macaw",
-    "python", "cobra", "rattlesnake", "sea snake", "tree frog",
-    "poison dart", "axolotl", "newt", "monitor lizard", "praying mantis",
-    "wasp", "hornet", "termite", "centipede", "millipede", "stick insect",
-    "cicada",
-
-    # Specific places/landmarks
-    "eiffel", "pyramids", "colosseum", "taj mahal", "great wall",
-    "stonehenge", "machu picchu", "statue of liberty", "big ben",
-    "burj khalifa", "grand canyon", "niagara", "everest", "sahara",
-    "amazon", "yellowstone", "barrier reef", "angkor wat", "petra",
-    "christ redeemer", "golden gate", "mount fuji", "victoria falls",
-    "dead sea", "mariana trench",
-
-    # Specific phenomena
-    "volcano", "lava", "eruption", "lightning", "tornado", "hurricane",
-    "tsunami", "earthquake", "avalanche", "wildfire", "geyser", "aurora",
-    "northern lights", "eclipse", "meteor", "sinkhole", "sandstorm",
-    "hailstorm", "whirlpool", "hot spring", "stalactite", "cave",
-    "blizzard", "typhoon", "monsoon",
-
-    # Plants & fungi
-    "venus flytrap", "sequoia", "bamboo", "cactus", "bonsai", "mushroom",
-    "kelp", "orchid", "sunflower", "cherry blossom", "baobab",
-    "mangrove", "redwood", "lotus", "carnivorous plant",
-
-    # Specific things with fact potential
-    "diamond", "gold", "crystal", "gemstone", "fossil", "obsidian",
-    "quartz", "amber", "copper", "iron", "silver", "platinum", "titanium",
-    "rocket", "satellite", "astronaut", "space station",
-    "microscope", "bacteria", "virus", "cell", "dna",
-    "robot", "drone", "laboratory", "telescope",
-    "coffee", "chocolate", "honey", "saffron", "vanilla", "sugar cane",
-    "submarine", "helicopter", "aircraft carrier", "oil rig",
-    "dam", "skyscraper", "tunnel", "bridge",
-    "coral reef", "shipwreck", "hydrothermal", "kelp forest",
-    "black hole", "supernova", "mars", "jupiter", "saturn",
-
-    # Cities (can have interesting facts)
-    "new york", "tokyo", "dubai", "hong kong", "paris", "london",
-    "singapore", "sydney", "shanghai", "rome", "istanbul", "bangkok",
-    "rio de janeiro", "cairo", "moscow", "venice", "amsterdam", "barcelona",
-]
-
 
 class PexelsClient:
     """Pexels API client for video search and download."""
 
     BASE_URL = "https://api.pexels.com/videos"
-    MIN_DESCRIPTION_WORDS = 4  # Minimum words for a good description
 
     def __init__(self, api_key: str, cache_dir: Path):
         self.api_key = api_key
@@ -290,57 +169,18 @@ class PexelsClient:
         URL format: https://www.pexels.com/video/young-lion-resting-on-grassy-hill-29960562/
         Returns: "young lion resting on grassy hill"
         """
-        # Extract the slug from URL (part between /video/ and the ID)
         match = re.search(r'/video/(.+)-(\d+)/?$', url)
         if match:
             slug = match.group(1)
-            # Convert hyphens to spaces
-            description = slug.replace('-', ' ')
-            return description
+            return slug.replace('-', ' ')
 
-        # Fallback: try to get anything after /video/
         match = re.search(r'/video/([^/]+)/?$', url)
         if match:
             slug = match.group(1)
-            # Remove trailing numbers (video ID)
             slug = re.sub(r'-?\d+$', '', slug)
             return slug.replace('-', ' ')
 
         return ""
-
-    def has_good_description(self, video_data: dict, search_term: str = "") -> tuple[bool, str]:
-        """Check if video has a detailed enough description in its URL.
-
-        A good description:
-        - Has at least 4 words
-        - Doesn't contain vague words like "person", "holding", etc.
-        - MUST contain a specific subject that has interesting fact potential
-
-        Returns: (is_good, description)
-        """
-        url = video_data.get("url", "")
-        description = self.extract_description_from_url(url)
-        word_count = len(description.split())
-
-        # Must have minimum words
-        if word_count < self.MIN_DESCRIPTION_WORDS:
-            return False, description
-
-        # Check for vague words that indicate unclear content
-        description_lower = description.lower()
-        for vague_word in VAGUE_WORDS:
-            if vague_word in description_lower:
-                return False, description
-
-        # MUST have a specific subject with fact potential
-        # This filters out generic scenery like "raindrops on leaves"
-        has_good_subject = any(
-            subject in description_lower for subject in GOOD_SUBJECT_WORDS
-        )
-        if not has_good_subject:
-            return False, description
-
-        return True, description
 
     def download(self, video_data: dict, description: str) -> VideoClip:
         """Download a video and return clip metadata."""
@@ -392,12 +232,78 @@ class VideoFetcher:
         self.openai_client = OpenAI(api_key=openai_api_key) if openai_api_key else None
         self._used_topics = set()  # Track used topics to avoid repeats
 
-    def _get_related_topic(self, original_topic: str) -> str:
-        """Use GPT to generate a related but different search topic.
+    def _ai_pick_best_video(self, candidates: list[tuple[dict, str]]) -> tuple[dict, str] | None:
+        """Use GPT to pick the best video from a batch of candidates.
 
-        Given "tiger", might return "bengal tiger hunting" or "tiger cub".
-        The goal is to find a related subject that will produce an interesting fact
-        and good Pexels results.
+        Sends all descriptions at once and asks GPT to pick the single best one
+        for a viral fact video. Returns None if none are good enough.
+        """
+        if not self.openai_client or not candidates:
+            return None
+
+        # Build a numbered list of descriptions
+        desc_list = "\n".join(
+            f"{i+1}. \"{desc}\"" for i, (_, desc) in enumerate(candidates)
+        )
+
+        try:
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You pick the best stock video for a viral YouTube Shorts fact video. Respond with JSON only."},
+                    {"role": "user", "content": f"""I have these stock video descriptions (extracted from URLs). Pick the SINGLE BEST one for a viral fact video.
+
+{desc_list}
+
+A GOOD video for facts shows:
+- A REAL, specific subject (real animal, real landmark, real phenomenon, real machine, etc.)
+- Something you could tell an interesting/crazy fact about
+- The actual thing, not a representation of it
+
+REJECT videos that show:
+- Statues, fountains, sculptures, paintings, toys, logos, or any ARTIFICIAL version of a thing
+- Generic scenery with no specific subject (just sky, grass, water, etc.)
+- People as the main focus (unless the person IS the interesting subject, like an astronaut)
+- Vague stock footage (office, business, lifestyle, fashion)
+- Abstract patterns, textures, or backgrounds
+- Indoor/domestic settings (rooms, desks, kitchens)
+
+If NONE of the options are good, set "pick" to 0.
+
+Respond with JSON only:
+{{"pick": 1, "reason": "short reason"}}"""},
+                    ],
+                    temperature=0.3,
+                    max_tokens=100,
+                )
+
+            content = response.choices[0].message.content
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
+            data = json.loads(content.strip())
+            pick = int(data.get("pick", 0))
+            reason = data.get("reason", "")
+
+            if pick > 0 and pick <= len(candidates):
+                print(f"    AI picked #{pick}: {reason}")
+                return candidates[pick - 1]
+            else:
+                print(f"    AI rejected all candidates: {reason}")
+                return None
+
+        except Exception as e:
+            print(f"    AI pick failed ({e}), using random")
+            return random.choice(candidates) if candidates else None
+
+    def _get_related_topic(self, original_topic: str) -> str:
+        """Use GPT to suggest a random loosely related topic.
+
+        Given "tiger", might return "lynx" or "camouflage" or "savanna".
+        The goal is variety — jump to a different but related subject at the
+        same level of vagueness, NOT a more specific version of the original.
         """
         if not self.openai_client:
             return original_topic
@@ -409,24 +315,29 @@ class VideoFetcher:
                     {"role": "system", "content": "You suggest video search terms. Respond with JSON only."},
                     {"role": "user", "content": f"""I'm searching for stock video footage about: "{original_topic}"
 
-Instead of searching for that exact term, suggest a RELATED but more specific or interesting search term that:
-1. Is visually related (would show similar footage on a stock video site)
-2. Has potential for a surprising/interesting fact
-3. Is 1-3 words (good for stock video search)
+Instead of searching for that exact term, suggest a DIFFERENT but loosely related topic. It should be:
+1. A DIFFERENT subject, NOT a more specific version of the original
+2. At the SAME level of vagueness/specificity (1-2 words)
+3. Related by category, theme, or loose association
+4. Something that would have good stock video footage
+
+Think of it as a random hop to a neighbor topic, NOT drilling deeper.
 
 Examples:
-- "shark" -> "hammerhead shark" or "great white" or "shark teeth"
-- "volcano" -> "lava flow" or "volcanic eruption" or "magma"
-- "eagle" -> "bald eagle" or "golden eagle" or "eagle hunting"
-- "diamond" -> "raw diamond" or "diamond mine" or "gemstone"
-- "coral" -> "coral reef" or "brain coral" or "coral bleaching"
+- "tiger" -> "lynx" or "camouflage" or "jungle"
+- "volcano" -> "geysers" or "tectonic plates" or "obsidian"
+- "eagle" -> "falcon" or "talons" or "migration"
+- "diamond" -> "sapphire" or "mining" or "pressure"
+- "coral" -> "plankton" or "tide pool" or "sea anemone"
+- "shark" -> "barracuda" or "deep sea" or "predator"
+- "eiffel tower" -> "colosseum" or "arc de triomphe" or "wrought iron"
 
 Respond with JSON only:
 {{"search_term": "your suggested term"}}"""},
-                ],
-                temperature=1.0,
-                max_tokens=50,
-            )
+                    ],
+                    temperature=1.0,
+                    max_tokens=50,
+                )
 
             content = response.choices[0].message.content
             if "```json" in content:
@@ -444,10 +355,10 @@ Respond with JSON only:
         return original_topic
 
     def fetch_viral_video(self, min_duration: int = 5, topic: str = None) -> VideoClip:
-        """Fetch a video on a viral topic with a good description.
+        """Fetch a video on a viral topic.
 
-        Only selects videos that have detailed descriptions in their URLs,
-        ensuring facts can be accurately matched to video content.
+        Collects candidates from Pexels search results, then uses GPT to pick
+        the best one for a viral fact video.
         """
         if not self.pexels:
             raise ValueError("No video API configured. Set PEXELS_API_KEY.")
@@ -468,7 +379,7 @@ Respond with JSON only:
 
         for search_term in topics_to_try:
             try:
-                # 75% of the time, ask GPT for a related but more interesting topic
+                # 75% of the time, ask GPT for a related topic
                 actual_search = search_term
                 if self.openai_client and random.random() < 0.75:
                     actual_search = self._get_related_topic(search_term)
@@ -480,34 +391,44 @@ Respond with JSON only:
                     print(f"  Searching for: {search_term}")
                 results = self.pexels.search(actual_search)
 
-                # Filter for suitable videos WITH good descriptions
-                suitable = []
+                # Collect all candidates with descriptions (basic filters only)
+                candidates = []
                 for video in results:
                     # Check duration
                     if video.get("duration", 0) < min_duration:
                         continue
 
-                    # Check for good description in URL
-                    has_good_desc, description = self.pexels.has_good_description(video, search_term)
-                    if has_good_desc:
-                        suitable.append((video, description))
+                    # Extract description from URL
+                    url = video.get("url", "")
+                    description = self.pexels.extract_description_from_url(url)
 
-                if suitable:
-                    # Pick a random one from ALL suitable results
-                    # Shuffle to ensure variety across multiple runs
-                    random.shuffle(suitable)
-                    video, description = suitable[0]
+                    # Must have at least 3 words to be useful
+                    if len(description.split()) < 3:
+                        continue
+
+                    candidates.append((video, description))
+
+                if not candidates:
+                    print(f"    No videos with descriptions found")
+                    continue
+
+                # Let GPT pick the best one from up to 15 random candidates
+                random.shuffle(candidates)
+                batch = candidates[:15]
+
+                result = self._ai_pick_best_video(batch)
+                if result:
+                    video, description = result
                     self._used_topics.add(search_term)
-                    print(f"    Found: \"{description}\" (from {len(suitable)} options)")
                     return self.pexels.download(video, description)
                 else:
-                    print(f"    No videos with detailed descriptions found")
+                    print(f"    AI found no suitable videos in {len(batch)} candidates")
 
             except Exception as e:
                 print(f"    Search failed: {e}")
                 continue
 
-        raise ValueError("Could not find suitable viral video with good description")
+        raise ValueError("Could not find suitable viral video")
 
     def fetch(self, keywords: list[str], min_duration: int = 5) -> VideoClip:
         """Legacy method - fetch video by keywords."""
@@ -515,11 +436,18 @@ Respond with JSON only:
             try:
                 print(f"  Searching for: {keyword}")
                 results = self.pexels.search(keyword)
+                candidates = []
                 for video in results:
                     if video.get("duration", 0) >= min_duration:
-                        has_good_desc, description = self.pexels.has_good_description(video)
-                        if has_good_desc:
-                            return self.pexels.download(video, description)
+                        url = video.get("url", "")
+                        description = self.pexels.extract_description_from_url(url)
+                        if len(description.split()) >= 3:
+                            candidates.append((video, description))
+                if candidates:
+                    result = self._ai_pick_best_video(candidates[:15])
+                    if result:
+                        video, description = result
+                        return self.pexels.download(video, description)
             except Exception as e:
                 print(f"    Search failed for '{keyword}': {e}")
                 continue

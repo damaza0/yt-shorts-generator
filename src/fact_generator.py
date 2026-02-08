@@ -1,11 +1,13 @@
 """
 Viral fact generation using OpenAI GPT API.
-Generates shocking/interesting facts based on available video content.
+Searches the web for real crazy facts and rewrites them for YouTube Shorts.
 """
 import json
+import random
 from dataclasses import dataclass
 from typing import List, Optional
 from openai import OpenAI
+from ddgs import DDGS
 
 
 @dataclass
@@ -16,6 +18,7 @@ class GeneratedFact:
     fact_text: str  # The main fact content
     highlight_words: list[str]  # Words to highlight in color
     category: str  # e.g., "science", "nature", "psychology"
+    interest_score: int  # 1-10 how interesting/fascinating this fact is
 
 
 @dataclass
@@ -56,9 +59,36 @@ Examples of VIRAL facts:
 - "Bananas are radioactive. Eating 10 million at once could kill you."
 - "Your brain uses 20% of your body's energy but is only 2% of your weight." """
 
-    MATCH_VIDEO_PROMPT = """You are a viral content creator for YouTube Shorts. I have a video showing: {video_description}
+    PICK_FACT_PROMPT = """You are a viral content creator for YouTube Shorts with millions of followers. I have a video showing: {video_description}
 
-Generate a MIND-BLOWING fact that relates to this video. The fact should make viewers STOP SCROLLING and think "wait, WHAT?!"
+I searched the internet for facts about this subject. Here are the search results:
+
+{search_results}
+
+YOUR JOB:
+1. Read ALL the search results above
+2. Sort the facts into two buckets:
+   - CRAZY facts: truly wild, disturbing, dark, myth-busting, or outrageous
+   - INTERESTING facts: genuinely surprising, counterintuitive, specific, or "wow I need to tell someone"
+3. If there are any truly CRAZY facts (stuff that makes people say "NO WAY"), randomly pick one of those
+4. If not, randomly pick from the most INTERESTING ones instead
+5. REWRITE the fact in your own words. This is for YouTube Shorts so it needs to HOOK people in the first second and make them want to share it
+6. Rate how good this fact is for YouTube Shorts on a scale of 1-10
+
+WHAT SCORES 8-10 (would go viral on YouTube Shorts):
+- "Wait... WHAT?" reaction — genuinely shocks or surprises
+- Specific numbers, dates, or comparisons that hit hard
+- Myth-busting — proving something everyone believes is actually wrong
+- Dark or unsettling truths that people don't talk about
+- Counterintuitive — the complete opposite of what you'd expect
+- Makes someone immediately want to comment or share
+
+WHAT SCORES 1-6 (would flop on YouTube Shorts):
+- Everyone already knows it
+- Vague and unspecific ("X is really important")
+- Sounds like a textbook or Wikipedia intro
+- Only mildly surprising — no real "wow" factor
+- Too long or complicated to absorb in 5 seconds
 
 IMPORTANT - MATCH THE VIDEO LITERALLY:
 The fact MUST match what is VISUALLY shown in the video. Examples:
@@ -66,108 +96,131 @@ The fact MUST match what is VISUALLY shown in the video. Examples:
 - "sculptures and statues inside a museum" = write about museums/sculptures, NOT the subject of the art
 - "cars on a road" = write about cars/driving/roads, NOT the destination
 - "reindeer grazing" = write about REINDEER specifically, not winter in general
-Think about what the VIEWER SEES, not abstract connections.
 
-PRIORITY: CONTROVERSIAL FACTS WHEN POSSIBLE
-Try to find a controversial, debate-sparking, or myth-busting fact first. These get the most engagement:
-- Things people commonly believe that are WRONG
-- Dark truths companies/industries hide
-- Facts that challenge common knowledge
-- Uncomfortable truths people don't want to hear
-
-If no good controversial fact exists for the topic, a genuinely interesting/shocking fact is fine. Don't force controversy if it doesn't fit.
-
-FACT TYPES (in order of preference):
-1. MYTH-BUSTING - things people commonly believe that are wrong
-2. HIDDEN TRUTH - things companies or industries don't want you to know
-3. DARK/CREEPY - unsettling facts about death, danger, or the unknown
-4. SHOCKING - genuinely surprising facts that make people go "no way"
-5. GROSS - disgusting facts about food, bodies, animals
-6. WEIRD SCIENCE - bizarre true facts about nature, the human body
-
-CRITICAL RULES:
-1. The fact MUST be 100% TRUE and VERIFIABLE
-2. The fact MUST match what is VISUALLY shown in the video (see examples above)
-3. NO boring textbook facts - if it's not interesting, find a better one
-4. The hook should match the tone - don't use dramatic hooks for mild facts
-5. NEVER say "tag a friend" or ask questions like "did you know this?"
-6. Let the fact speak for itself
-7. Length: 2-3 punchy sentences (30-45 words)
+WRITING STYLE - THIS IS CRITICAL:
+- Write like you're telling a friend something insane, not like a Wikipedia article
+- Short punchy sentences. No filler words.
+- Lead with the most shocking part, not the setup
+- Use "you" and "your" to make it personal when it fits
+- NEVER start with "Did you know" — that's overdone and boring
+- NEVER use phrases like "Imagine this" or "Picture this" — just state the fact
+- Numbers hit harder than adjectives: "3,000 years old" > "very ancient"
 
 HOOK GUIDELINES:
-The hook should be SPECIFIC to the fact, not generic. It should tease the most interesting part.
+The hook should be SPECIFIC to the fact, not generic. It should tease the most shocking/interesting part.
 
-GOOD HOOKS (specific, tease the fact):
-- "Dolphins are murderers:" (specific to dolphin fact)
-- "Honey is bee vomit:" (specific, attention-grabbing)
-- "Your chocolate has bugs:" (specific to FDA insect fact)
-- "Octopuses have 3 hearts:" (specific, intriguing)
-- "Breakfast is a scam:" (specific to cereal company fact)
-- "Deer kill more than sharks:" (specific, surprising comparison)
-
-BAD HOOKS (generic, boring):
-- "Actually terrifying:" (too generic)
-- "You've been lied to:" (overused, generic)
-- "Most people don't know:" (generic filler)
-- "This is insane:" (generic)
-- "EXPOSED:" (clickbait, generic)
-
-The hook should make someone curious about THIS SPECIFIC fact, not just signal "here comes a fact."
-
-GOOD FULL EXAMPLES:
-- Hook: "Breakfast is a marketing scam:" Fact: "The idea that breakfast is 'the most important meal' was invented by cereal companies in the 1900s. They paid doctors to promote it."
-- Hook: "Dolphins kill for fun:" Fact: "They've been documented torturing baby sharks and tossing their corpses around for hours. Not so cute anymore."
-- Hook: "Your chocolate has insects:" Fact: "The FDA allows up to 60 insect fragments per 100 grams of chocolate. You've eaten thousands of bug parts and didn't know it."
-- Hook: "Honey is just bee vomit:" Fact: "Bees regurgitate nectar repeatedly to make it. It never spoils because it's too acidic for bacteria. 3000-year-old Egyptian honey is still edible."
-- Hook: "Octopuses have 3 hearts:" Fact: "And blue blood. When they swim, one heart stops beating entirely. That's why they prefer crawling instead."
-
-BAD EXAMPLES:
-- Video shows "a star decoration" but fact is about outer space stars (WRONG - doesn't match visuals)
-- "Mountains are tall and snowy" (boring, who cares?)
-- Generic hooks like "This is CRAZY:" for any fact (lazy)
-- "Tag someone who needs to see this!" (annoying)
+GOOD HOOKS: "Dolphins are murderers:" / "Honey is bee vomit:" / "Your chocolate has bugs:" / "Bananas are radioactive:"
+BAD HOOKS: "Actually terrifying:" / "You've been lied to:" / "This is insane:" / "Wait for it:"
 
 You MUST respond with valid JSON only:
 {{
-    "hook": "A SHORT hook (2-6 words) that teases the SPECIFIC interesting part of THIS fact. End with a colon.",
-    "fact_text": "The actual interesting fact in 2-3 sentences (30-45 words). No questions, no 'tag a friend', just the fact.",
+    "hook": "A SHORT hook (2-6 words) that teases the SPECIFIC interesting part. End with a colon.",
+    "fact_text": "The rewritten fact in 2-3 punchy sentences (30-45 words). No filler. No 'did you know'. No 'imagine this'.",
     "highlight_words": ["word1", "word2", "word3", "word4"],
-    "category": "category_name"
-}}"""
+    "category": "category_name",
+    "interest_score": 8,
+    "source_fact": "Brief note of which fact you picked and whether it was crazy or interesting"
+}}
+
+If NONE of the search results contain anything good (nothing scores above 6), set interest_score to the highest you found. Be honest - don't inflate scores for boring facts."""
 
     def __init__(self, api_key: str):
         self.client = OpenAI(api_key=api_key)
+        self.ddgs = DDGS()
 
     def _clean_text(self, text: str) -> str:
         """Remove AI-style formatting like em dashes, fancy quotes, etc."""
-        # Replace em dashes and en dashes with regular dashes or commas
         text = text.replace("—", " - ")  # em dash
         text = text.replace("–", " - ")  # en dash
-        # Replace fancy quotes with regular quotes
-        text = text.replace(""", '"').replace(""", '"')
-        text = text.replace("'", "'").replace("'", "'")
-        # Remove double spaces that might result
+        text = text.replace("\u201c", '"').replace("\u201d", '"')
+        text = text.replace("\u2018", "'").replace("\u2019", "'")
         while "  " in text:
             text = text.replace("  ", " ")
         return text.strip()
 
+    def _extract_subject(self, video_description: str) -> str:
+        """Extract the main subject from a video description for web searching."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "Extract the main subject from a video description. Respond with just the subject, nothing else."},
+                {"role": "user", "content": f'Video description: "{video_description}"\n\nWhat is the main subject? Examples:\n- "young lion resting on grassy hill" -> "lions"\n- "close up of a tarantula on a rock" -> "tarantulas"\n- "eiffel tower at night with lights" -> "Eiffel Tower"\n- "coral reef with tropical fish swimming" -> "coral reefs"\n\nRespond with JUST the subject (1-3 words):'},
+            ],
+            temperature=0.0,
+            max_tokens=20,
+        )
+        return response.choices[0].message.content.strip().strip('"')
+
+    def _search_facts(self, subject: str) -> str:
+        """Search the web for crazy, interesting, and surprising facts about a subject."""
+        all_queries = [
+            f"most insane crazy facts about {subject}",
+            f"disturbing facts about {subject} you didn't know",
+            f"shocking truth about {subject}",
+            f"most interesting facts about {subject}",
+            f"surprising things about {subject}",
+        ]
+        # Pick 3 random queries each time for variety
+        search_queries = random.sample(all_queries, min(3, len(all_queries)))
+
+        all_results = []
+        for query in search_queries:
+            try:
+                results = self.ddgs.text(query, max_results=5)
+                for r in results:
+                    title = r.get("title", "")
+                    body = r.get("body", "")
+                    if title or body:
+                        all_results.append(f"- {title}: {body}")
+            except Exception as e:
+                print(f"    Search failed for '{query}': {e}")
+                continue
+
+        if not all_results:
+            return ""
+
+        # Deduplicate and limit
+        seen = set()
+        unique = []
+        for r in all_results:
+            if r not in seen:
+                seen.add(r)
+                unique.append(r)
+
+        return "\n".join(unique[:15])
+
     def generate_for_video(self, video_description: str) -> GeneratedFact:
-        """Generate a viral fact that matches a specific video."""
-        prompt = self.MATCH_VIDEO_PROMPT.format(video_description=video_description)
+        """Search for interesting facts about the video subject, pick one, and rewrite it."""
+        # Step 1: Extract the main subject from the video description
+        subject = self._extract_subject(video_description)
+        print(f"    Subject extracted: {subject}")
+
+        # Step 2: Search the web for interesting facts about this subject
+        print(f"    Searching web for interesting facts about '{subject}'...")
+        search_results = self._search_facts(subject)
+
+        if not search_results:
+            print("    No search results found, falling back to GPT knowledge")
+            search_results = "(No search results found. Use your own knowledge to find the most INTERESTING fact about this subject.)"
+
+        # Step 3: GPT picks an interesting fact and rewrites it
+        prompt = self.PICK_FACT_PROMPT.format(
+            video_description=video_description,
+            search_results=search_results,
+        )
 
         response = self.client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You create viral YouTube Shorts facts. Always respond with valid JSON only. NEVER use em dashes (—) or en dashes (–). Use commas or periods instead."},
+                {"role": "system", "content": "You pick the most interesting facts from search results and rewrite them for viral YouTube Shorts. Always respond with valid JSON only. NEVER use em dashes or en dashes. Use commas or periods instead."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.9,
-            max_tokens=300,
+            max_tokens=400,
         )
 
         content = response.choices[0].message.content
 
-        # Handle potential markdown code blocks
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0]
         elif "```" in content:
@@ -175,35 +228,40 @@ You MUST respond with valid JSON only:
 
         data = json.loads(content.strip())
 
-        # Clean up AI formatting from text
+        interest_score = int(data.get("interest_score", 5))
+        source_fact = data.get("source_fact", "")
+        if source_fact:
+            print(f"    Source: {source_fact[:80]}")
+        print(f"    Interest score: {interest_score}/10")
+
         return GeneratedFact(
             hook=self._clean_text(data["hook"]),
             fact_text=self._clean_text(data["fact_text"]),
             highlight_words=[w for w in data["highlight_words"] if len(w) > 2],
             category=data["category"],
+            interest_score=interest_score,
         )
 
-    METADATA_PROMPT = """Based on this viral fact, generate YouTube Shorts metadata that will maximize views and engagement.
+    METADATA_PROMPT = """Based on this viral fact, generate YouTube Shorts metadata.
 
 Fact Hook: {hook}
 Fact Text: {fact_text}
 Category: {category}
 
 RULES:
-1. Title: MUST be under 70 characters, include 1 emoji, be curiosity-driving
-2. Description: Include the fact and relevant hashtags (#Shorts is REQUIRED). Keep it short and punchy.
-3. Tags: 8-12 relevant keywords for discovery (no hashtags, just words)
+1. Title: MUST be under 70 characters. NO emojis. Be curiosity-driving and specific.
+2. Tags: 8-12 relevant keywords for discovery (no hashtags, just words)
 
 TITLE TIPS (make it clickable):
 - Use numbers when possible ("99% of people don't know...")
 - Create curiosity gap ("The truth about...")
 - Use power words (shocking, insane, never, always)
 - Match the hook's energy
+- NO EMOJIS in the title
 
 Respond with JSON only:
 {{
-    "title": "Catchy title with emoji (under 70 chars)",
-    "description": "Short description with hashtags",
+    "title": "Catchy title WITHOUT emojis (under 70 chars)",
     "tags": ["tag1", "tag2", "tag3", ...]
 }}"""
 
@@ -251,22 +309,20 @@ Respond with JSON only:
 
         data = json.loads(content.strip())
 
-        # Ensure required elements
-        title = data["title"][:100]  # YouTube limit
-        description = data["description"]
+        # Strip any emojis from title
+        import re
+        title = data["title"][:100]
+        title = re.sub(r'[^\w\s\-\'\",.:;!?&%()/]', '', title).strip()
 
-        # Ensure #Shorts is in description
-        if "#Shorts" not in description:
-            description = description.rstrip() + "\n\n#Shorts"
-
-        # Add subscribe CTA
-        if "Subscribe" not in description:
-            description += "\n\nSubscribe for more interesting facts!"
+        # Description is just 3 hashtags
+        tags = data.get("tags", [])[:3]
+        hashtags = " ".join(f"#{tag.replace(' ', '')}" for tag in tags)
+        description = f"#Shorts {hashtags}"
 
         return YouTubeMetadata(
             title=self._clean_text(title),
-            description=description[:5000],  # YouTube limit
-            tags=data.get("tags", [])[:30],  # YouTube limit ~500 chars total
+            description=description,
+            tags=data.get("tags", [])[:30],
         )
 
     def generate(self, topic: str = None) -> GeneratedFact:
@@ -302,4 +358,5 @@ Respond with JSON only:
             fact_text=self._clean_text(data["fact_text"]),
             highlight_words=[w for w in data["highlight_words"] if len(w) > 2],
             category=data["category"],
+            interest_score=10,  # Standalone generation assumed interesting
         )
