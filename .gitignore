@@ -19,8 +19,5 @@ output/
 .vscode/
 .idea/
 
-# Model weights (auto-downloaded at runtime)
-*.pt
-
 # OS
 .DS_Store

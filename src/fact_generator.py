@@ -83,12 +83,20 @@ WHAT SCORES 8-10 (would go viral on YouTube Shorts):
 - Counterintuitive — the complete opposite of what you'd expect
 - Makes someone immediately want to comment or share
 
+WHAT SCORES 7 (decent but NOT good enough):
+- Mildly interesting but no real shock factor
+- Descriptive facts about how something looks or where it is ("X is really big/beautiful")
+- Travel guide facts ("X is a popular destination")
+- Common knowledge dressed up as interesting
+
 WHAT SCORES 1-6 (would flop on YouTube Shorts):
 - Everyone already knows it
 - Vague and unspecific ("X is really important")
 - Sounds like a textbook or Wikipedia intro
 - Only mildly surprising — no real "wow" factor
 - Too long or complicated to absorb in 5 seconds
+- "This place is beautiful/breathtaking" — that's not a fact, that's an opinion
+- Generic tourism facts nobody would share
 
 IMPORTANT - MATCH THE VIDEO LITERALLY:
 The fact MUST match what is VISUALLY shown in the video. Examples:

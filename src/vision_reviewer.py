@@ -152,6 +152,93 @@ class VisionReviewer:
             video_duration=duration,
         )
 
+    def verify_final_video(self, video_path: Path, fact_hook: str, fact_text: str) -> bool:
+        """Verify the FINAL composed video actually shows the subject of the fact.
+
+        This is the last quality gate before upload. Extracts frames from the
+        finished video and asks GPT Vision if the fact's subject is clearly visible.
+
+        Returns True if the subject is visible, False if it should be rejected.
+        """
+        print("    Running final video verification...")
+        frames, _ = self._extract_frames(video_path, num_frames=3)
+
+        if not frames:
+            print("    Could not extract frames from final video")
+            return False
+
+        content = [
+            {
+                "type": "text",
+                "text": (
+                    f"This is a YouTube Short. The fact shown on screen is:\n"
+                    f"Hook: \"{fact_hook}\"\n"
+                    f"Fact: \"{fact_text}\"\n\n"
+                    f"Here are {len(frames)} frames from the final video.\n\n"
+                    "QUESTION: Is the SUBJECT of the fact clearly visible in the video portion of the frames?\n\n"
+                    "For example:\n"
+                    "- Fact about dolphins → a real dolphin must be visible (not a statue or fountain)\n"
+                    "- Fact about the Grand Canyon → the Grand Canyon must be visible\n"
+                    "- Fact about robots → a robot must be visible\n"
+                    "- Fact about honey → bees or honey must be visible\n\n"
+                    "The subject doesn't need to fill the entire frame, but it must be clearly "
+                    "identifiable and not cut off or obscured.\n\n"
+                    "Respond with JSON only:\n"
+                    "{\n"
+                    '  "subject_visible": true/false,\n'
+                    '  "explanation": "what you see in the video portion"\n'
+                    "}"
+                ),
+            }
+        ]
+
+        for i, frame_b64 in enumerate(frames):
+            content.append({
+                "type": "text",
+                "text": f"Frame {i+1}:",
+            })
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{frame_b64}",
+                    "detail": "low",
+                },
+            })
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You verify that YouTube Short videos show the correct subject. Respond with JSON only.",
+                    },
+                    {"role": "user", "content": content},
+                ],
+                max_tokens=200,
+            )
+
+            result_text = response.choices[0].message.content
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0]
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0]
+
+            data = json.loads(result_text.strip())
+            visible = data.get("subject_visible", False)
+            explanation = data.get("explanation", "")
+
+            if visible:
+                print(f"    Final check PASSED - {explanation[:80]}")
+            else:
+                print(f"    Final check FAILED - {explanation[:80]}")
+
+            return visible
+
+        except Exception as e:
+            print(f"    Final verification error: {e}")
+            return True  # Don't block on API errors
+
     def get_best_start_time(self, verification: VisionVerification) -> float:
         """Calculate the best start time based on which frame was best.
 

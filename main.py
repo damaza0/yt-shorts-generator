@@ -119,10 +119,7 @@ def generate(topic, duration, no_music, output):
     reviewer = VisionReviewer(settings.openai_api_key)
     fact_gen = FactGenerator(settings.openai_api_key)
 
-    video_clip = None
-    vision_result = None
-    fact = None
-    start_time = 0
+    output_path = None
 
     for topic_attempt in range(MAX_TOPIC_ATTEMPTS):
         if topic_attempt > 0:
@@ -166,84 +163,90 @@ def generate(topic, duration, no_music, output):
         click.echo(f"   Category: {fact.category}")
         click.echo(f"   Interest score: {click.style(str(fact.interest_score) + '/10', fg='yellow' if fact.interest_score >= MIN_INTEREST_SCORE else 'red')}")
 
-        if fact.interest_score >= MIN_INTEREST_SCORE:
-            click.echo(click.style(f"   Interesting enough! (score {fact.interest_score}/10)", fg="green"))
+        if fact.interest_score < MIN_INTEREST_SCORE:
+            click.echo(click.style(f"   Not interesting enough (score {fact.interest_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
+            continue
+
+        click.echo(click.style(f"   Interesting enough! (score {fact.interest_score}/10)", fg="green"))
+
+        # Step 3: Get music
+        music_track = None
+        if not no_music:
+            click.echo("\n3. Picking background music...")
+            clips_dir = Path(__file__).parent / "clips"
+            music_mgr = MusicManager(clips_dir, settings.openai_api_key)
+            music_track = music_mgr.pick_track(fact.hook, fact.fact_text, fact.category)
+            click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
+        else:
+            click.echo("\n3. Skipping music (--no-music flag)")
+
+        # Step 4: Render text with branding
+        click.echo("\n4. Rendering text overlay with branding...")
+        renderer = TextRenderer(
+            height=990,
+            font_size_hook=settings.font_size_hook,
+            font_size_fact=settings.font_size_fact,
+            text_color=settings.text_color,
+            bg_color=settings.bg_color,
+            logo_path=settings.logo_path,
+            channel_name=settings.channel_name,
+            channel_handle=settings.channel_handle,
+        )
+        click.echo(f"   Channel: {settings.channel_name}")
+        click.echo(f"   Highlight color: RGB{renderer.highlight_color}")
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        text_image_path = settings.output_dir / f"_temp_text_{timestamp}.png"
+        renderer.render(fact.hook, fact.fact_text, fact.highlight_words, text_image_path)
+        click.echo("   Text image created")
+
+        # Step 5: Compose video
+        click.echo("\n5. Composing final video...")
+        composer = VideoComposer(
+            width=settings.video_width,
+            height=settings.video_height,
+            duration=duration,
+        )
+
+        if output:
+            output_path = Path(output)
+        else:
+            safe_category = fact.category.replace("/", "_").replace(" ", "_").replace(":", "")
+            output_path = settings.output_dir / f"short_{safe_category}_{timestamp}.mp4"
+
+        music_path = music_track.path if music_track else None
+        composer.compose(
+            text_image_path, video_clip.path, output_path, music_path,
+            start_time=start_time,
+        )
+
+        # Cleanup temp text image
+        if text_image_path.exists():
+            text_image_path.unlink()
+
+        # Step 6: Final GPT Vision check — is the subject visible in the finished video?
+        click.echo("\n6. Final verification — checking subject visibility...")
+        subject_visible = reviewer.verify_final_video(output_path, fact.hook, fact.fact_text)
+
+        if subject_visible:
+            click.echo(click.style("   Subject is visible! Video is good.", fg="green"))
             break
         else:
-            click.echo(click.style(f"   Not interesting enough (score {fact.interest_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
-            fact = None
+            click.echo(click.style("   Subject NOT visible in final video. Rejecting and restarting...", fg="red"))
+            # Delete the bad video
+            if output_path.exists():
+                output_path.unlink()
+            output_path = None
 
-    if not video_clip or not fact:
-        click.echo(click.style(f"Could not find an interesting enough fact after {MAX_TOPIC_ATTEMPTS} topics.", fg="red"))
+    if not output_path or not output_path.exists():
+        click.echo(click.style(f"Could not produce a good video after {MAX_TOPIC_ATTEMPTS} attempts.", fg="red"))
         return
-
-    # Step 3: Get music
-    music_track = None
-    if not no_music:
-        click.echo("\n3. Picking background music...")
-        clips_dir = Path(__file__).parent / "clips"
-        music_mgr = MusicManager(clips_dir, settings.openai_api_key)
-        music_track = music_mgr.pick_track(fact.hook, fact.fact_text, fact.category)
-        click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
-    else:
-        click.echo("\n3. Skipping music (--no-music flag)")
-
-    # Step 4: Render text with branding (highlight color is randomized automatically)
-    click.echo("\n4. Rendering text overlay with branding...")
-    # Text area height = total height - video height - bottom padding
-    # 1920 - 750 (video) - 180 (bottom padding) = 990
-    renderer = TextRenderer(
-        height=990,  # Text area height
-        font_size_hook=settings.font_size_hook,
-        font_size_fact=settings.font_size_fact,
-        text_color=settings.text_color,
-        bg_color=settings.bg_color,
-        logo_path=settings.logo_path,
-        channel_name=settings.channel_name,
-        channel_handle=settings.channel_handle,
-    )
-    # Show which color was randomly selected
-    click.echo(f"   Channel: {settings.channel_name}")
-    click.echo(f"   Highlight color: RGB{renderer.highlight_color}")
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    text_image_path = settings.output_dir / f"_temp_text_{timestamp}.png"
-    renderer.render(fact.hook, fact.fact_text, fact.highlight_words, text_image_path)
-    click.echo("   Text image created")
-
-    # Step 5: Compose video (YOLO auto-centers subject)
-    click.echo("\n5. Composing final video...")
-    composer = VideoComposer(
-        width=settings.video_width,
-        height=settings.video_height,
-        duration=duration,
-    )
-
-    if output:
-        output_path = Path(output)
-    else:
-        # Make category safe for filename (remove slashes, spaces, special chars)
-        safe_category = fact.category.replace("/", "_").replace(" ", "_").replace(":", "")
-        output_path = settings.output_dir / f"short_{safe_category}_{timestamp}.mp4"
-
-    music_path = music_track.path if music_track else None
-    composer.compose(
-        text_image_path, video_clip.path, output_path, music_path,
-        start_time=start_time,
-    )
-
-    # Cleanup temp files
-    if text_image_path.exists():
-        text_image_path.unlink()
 
     # Final output
     click.echo(click.style("\n=== Video Generated Successfully! ===\n", fg="green", bold=True))
     click.echo(f"Output: {click.style(str(output_path), fg='cyan')}")
     click.echo(f"Duration: {duration} seconds")
     click.echo(f"Resolution: {settings.video_width}x{settings.video_height}")
-
-    if music_track:
-        click.echo(f"\nMusic: {music_track.title}")
 
 
 @cli.command()
@@ -314,10 +317,8 @@ def auto(topic, duration, privacy, no_upload):
     reviewer = VisionReviewer(settings.openai_api_key)
     fact_gen = FactGenerator(settings.openai_api_key)
 
-    video_clip = None
-    vision_result = None
+    output_path = None
     fact = None
-    start_time = 0
 
     for topic_attempt in range(MAX_TOPIC_ATTEMPTS):
         if topic_attempt > 0:
@@ -360,67 +361,79 @@ def auto(topic, duration, privacy, no_upload):
         click.echo(f"   Category: {fact.category}")
         click.echo(f"   Interest score: {click.style(str(fact.interest_score) + '/10', fg='yellow' if fact.interest_score >= MIN_INTEREST_SCORE else 'red')}")
 
-        if fact.interest_score >= MIN_INTEREST_SCORE:
-            click.echo(click.style(f"   Interesting enough! (score {fact.interest_score}/10)", fg="green"))
+        if fact.interest_score < MIN_INTEREST_SCORE:
+            click.echo(click.style(f"   Not interesting enough (score {fact.interest_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
+            continue
+
+        click.echo(click.style(f"   Interesting enough! (score {fact.interest_score}/10)", fg="green"))
+
+        # Step 3: Get music
+        click.echo("\n3. Picking background music...")
+        clips_dir = Path(__file__).parent / "clips"
+        music_mgr = MusicManager(clips_dir, settings.openai_api_key)
+        music_track = music_mgr.pick_track(fact.hook, fact.fact_text, fact.category)
+        click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
+
+        # Step 4: Render text
+        click.echo("\n4. Rendering text overlay...")
+        renderer = TextRenderer(
+            height=990,
+            font_size_hook=settings.font_size_hook,
+            font_size_fact=settings.font_size_fact,
+            text_color=settings.text_color,
+            bg_color=settings.bg_color,
+            logo_path=settings.logo_path,
+            channel_name=settings.channel_name,
+            channel_handle=settings.channel_handle,
+        )
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        text_image_path = settings.output_dir / f"_temp_text_{timestamp}.png"
+        renderer.render(fact.hook, fact.fact_text, fact.highlight_words, text_image_path)
+        click.echo("   Text image created")
+
+        # Step 5: Compose video
+        click.echo("\n5. Composing final video...")
+        composer = VideoComposer(
+            width=settings.video_width,
+            height=settings.video_height,
+            duration=duration,
+        )
+
+        safe_category = fact.category.replace("/", "_").replace(" ", "_").replace(":", "")
+        output_path = settings.output_dir / f"short_{safe_category}_{timestamp}.mp4"
+
+        music_path = music_track.path if music_track else None
+        composer.compose(
+            text_image_path, video_clip.path, output_path, music_path,
+            start_time=start_time,
+        )
+
+        # Cleanup temp text image
+        if text_image_path.exists():
+            text_image_path.unlink()
+
+        # Step 6: Final GPT Vision check — is the subject visible in the finished video?
+        click.echo("\n6. Final verification — checking subject visibility...")
+        subject_visible = reviewer.verify_final_video(output_path, fact.hook, fact.fact_text)
+
+        if subject_visible:
+            click.echo(click.style("   Subject is visible! Video is good.", fg="green"))
             break
         else:
-            click.echo(click.style(f"   Not interesting enough (score {fact.interest_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
-            fact = None
+            click.echo(click.style("   Subject NOT visible in final video. Rejecting and restarting...", fg="red"))
+            if output_path.exists():
+                output_path.unlink()
+            output_path = None
 
-    if not video_clip or not fact:
-        click.echo(click.style(f"Could not find an interesting enough fact after {MAX_TOPIC_ATTEMPTS} topics.", fg="red"))
+    if not output_path or not output_path.exists():
+        click.echo(click.style(f"Could not produce a good video after {MAX_TOPIC_ATTEMPTS} attempts.", fg="red"))
         sys.exit(1)
-
-    # Step 3: Get music
-    click.echo("\n3. Picking background music...")
-    clips_dir = Path(__file__).parent / "clips"
-    music_mgr = MusicManager(clips_dir, settings.openai_api_key)
-    music_track = music_mgr.pick_track(fact.hook, fact.fact_text, fact.category)
-    click.echo(f"   Track: {click.style(music_track.title, fg='magenta')}")
-
-    # Step 4: Render text
-    click.echo("\n4. Rendering text overlay...")
-    renderer = TextRenderer(
-        height=990,
-        font_size_hook=settings.font_size_hook,
-        font_size_fact=settings.font_size_fact,
-        text_color=settings.text_color,
-        bg_color=settings.bg_color,
-        logo_path=settings.logo_path,
-        channel_name=settings.channel_name,
-        channel_handle=settings.channel_handle,
-    )
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    text_image_path = settings.output_dir / f"_temp_text_{timestamp}.png"
-    renderer.render(fact.hook, fact.fact_text, fact.highlight_words, text_image_path)
-    click.echo("   Text image created")
-
-    # Step 5: Compose video (YOLO auto-centers subject)
-    click.echo("\n5. Composing final video...")
-    composer = VideoComposer(
-        width=settings.video_width,
-        height=settings.video_height,
-        duration=duration,
-    )
-
-    safe_category = fact.category.replace("/", "_").replace(" ", "_").replace(":", "")
-    output_path = settings.output_dir / f"short_{safe_category}_{timestamp}.mp4"
-
-    music_path = music_track.path if music_track else None
-    composer.compose(
-        text_image_path, video_clip.path, output_path, music_path,
-        start_time=start_time,
-    )
-
-    # Cleanup temp files
-    if text_image_path.exists():
-        text_image_path.unlink()
 
     click.echo(f"   Video saved: {output_path}")
 
-    # Step 6: Generate YouTube metadata
-    click.echo("\n6. Generating YouTube metadata...")
+    # Step 7: Generate YouTube metadata
+    click.echo("\n7. Generating YouTube metadata...")
     metadata = fact_gen.generate_metadata(
         fact=fact,
         channel_name=settings.channel_name,
@@ -428,13 +441,13 @@ def auto(topic, duration, privacy, no_upload):
     click.echo(f"   Title: {click.style(metadata.title, fg='yellow')}")
     click.echo(f"   Tags: {', '.join(metadata.tags[:5])}...")
 
-    # Step 7: Upload to YouTube (if enabled)
+    # Step 8: Upload to YouTube (if enabled)
     if no_upload:
-        click.echo("\n7. Skipping upload (--no-upload flag)")
+        click.echo("\n8. Skipping upload (--no-upload flag)")
         click.echo(click.style("\n=== Video Generated Successfully! ===\n", fg="green", bold=True))
         click.echo(f"Output: {output_path}")
     else:
-        click.echo(f"\n7. Uploading to YouTube ({privacy})...")
+        click.echo(f"\n8. Uploading to YouTube ({privacy})...")
 
         from src.youtube_uploader import YouTubeUploader, VideoMetadata
 

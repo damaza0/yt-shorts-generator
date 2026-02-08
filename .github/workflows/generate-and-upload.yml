@@ -28,7 +28,7 @@ env:
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Cancel if video generation + upload takes longer than 15 mins
+    timeout-minutes: 10  # Cancel if video generation + upload takes longer than 10 mins
 
     steps:
       - name: Checkout repository

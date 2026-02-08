@@ -257,16 +257,20 @@ class VideoFetcher:
 
 A GOOD video for facts shows:
 - A REAL, specific subject (real animal, real landmark, real phenomenon, real machine, etc.)
-- Something you could tell an interesting/crazy fact about
+- Something you could tell a CRAZY or MIND-BLOWING fact about
 - The actual thing, not a representation of it
+- Something people find inherently fascinating (dangerous animals, extreme nature, weird science, etc.)
 
 REJECT videos that show:
 - Statues, fountains, sculptures, paintings, toys, logos, or any ARTIFICIAL version of a thing
-- Generic scenery with no specific subject (just sky, grass, water, etc.)
+- Generic scenery with no specific subject (just sky, grass, water, sunsets, sunrises, clouds, etc.)
+- BORING subjects nobody cares about (generic bridges, random skylines, calm lakes, flower fields, etc.)
 - People as the main focus (unless the person IS the interesting subject, like an astronaut)
 - Vague stock footage (office, business, lifestyle, fashion)
 - Abstract patterns, textures, or backgrounds
 - Indoor/domestic settings (rooms, desks, kitchens)
+- Generic city footage, traffic, or buildings (unless it's an iconic landmark)
+- Tourism/travel footage with no specific interesting subject
 
 If NONE of the options are good, set "pick" to 0.
 
