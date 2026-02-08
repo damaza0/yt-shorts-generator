@@ -113,6 +113,22 @@ WRITING STYLE - THIS IS CRITICAL:
 - NEVER start with "Did you know" — that's overdone and boring
 - NEVER use phrases like "Imagine this" or "Picture this" — just state the fact
 - Numbers hit harder than adjectives: "3,000 years old" > "very ancient"
+- Every sentence MUST add a new fact or detail. NEVER write a sentence that just reacts to or comments on the previous one.
+- No exclamation marks in the fact text. Use periods. Let the fact speak for itself.
+
+NEVER WRITE THESE (filler/commentary that adds nothing):
+- "Talk about X!" / "Now THAT'S X." / "Let that sink in." / "Pretty wild, right?"
+- "They're the X of the Y world" / "real-life symbols of Z" / "nature's version of X"
+- "This beast" / "this bad boy" / "a whopping" / "a jaw-dropping" / "a staggering"
+- "Making it one of the most..." / "It's no surprise that..." / "truly remarkable"
+- Any sentence that is just a reaction, summary, or commentary on the fact you just stated
+
+GOOD vs BAD writing (same fact, different quality):
+BAD: "Camels can drink 30 gallons of water in just 13 minutes. Then they survive weeks without a single sip. Talk about survival skills!"
+GOOD: "Camels can drink 30 gallons of water in 13 minutes, then survive weeks without a single drop."
+
+BAD: "Night Herons have sharp eyesight that lets them hunt fish in low-light. They're like the night vision experts of the bird world!"
+GOOD: "Night herons vibrate their bills underwater to lure fish closer. Then they strike in the dark."
 
 HOOK GUIDELINES:
 The hook should be SPECIFIC to the fact, not generic. It should tease the most shocking/interesting part.
@@ -123,7 +139,7 @@ BAD HOOKS: "Actually terrifying:" / "You've been lied to:" / "This is insane:" /
 You MUST respond with valid JSON only:
 {{
     "hook": "A SHORT hook (2-6 words) that teases the SPECIFIC interesting part. End with a colon.",
-    "fact_text": "The rewritten fact in 2-3 punchy sentences (30-45 words). No filler. No 'did you know'. No 'imagine this'.",
+    "fact_text": "The rewritten fact in 1-3 punchy sentences (20-45 words). Every sentence must add new info. No filler. No commentary. No exclamation marks.",
     "highlight_words": ["word1", "word2", "word3", "word4"],
     "category": "category_name",
     "interest_score": 8,
@@ -266,31 +282,33 @@ If NONE of the search results contain anything good (nothing scores above 6), se
                     {
                         "role": "system",
                         "content": (
-                            "You are a brutally honest content judge for YouTube Shorts. "
-                            "You score facts on a 1-10 scale. You are HARSH. Most facts are 5-7. "
-                            "Only truly shocking, specific, counterintuitive facts score 8+. "
-                            "You have no bias — you didn't write this fact and you don't care about being nice."
+                            "You are an honest content judge for YouTube Shorts. "
+                            "You score facts on a 1-10 scale based on how likely they are to make "
+                            "someone stop scrolling and share it. You didn't write this fact and "
+                            "you have no bias toward it."
                         ),
                     },
                     {
                         "role": "user",
                         "content": (
-                            f"Rate this YouTube Short fact 1-10. Would it make someone stop scrolling and share it?\n\n"
+                            f"Rate this YouTube Short fact 1-10. Would it make someone stop scrolling?\n\n"
                             f"Hook: \"{fact.hook}\"\n"
                             f"Fact: \"{fact.fact_text}\"\n\n"
                             "SCORING RULES:\n"
-                            "9-10: Genuinely jaw-dropping. I'd screenshot this and send it to 5 friends right now.\n"
-                            "8: Really surprising. Makes you go 'wait, seriously?' and want to verify it.\n"
-                            "7: Decent trivia. Mildly interesting but wouldn't make anyone share it.\n"
-                            "5-6: Boring. Sounds like a Wikipedia summary or travel brochure.\n"
-                            "1-4: Terrible. Common knowledge, vague, or just an opinion disguised as a fact.\n\n"
-                            "Be honest. Most facts are NOT 8+. If it doesn't genuinely shock you, don't score it high.\n\n"
+                            "9-10: Jaw-dropping. People would screenshot this and send it to friends.\n"
+                            "8: Genuinely surprising. Makes you go 'wait, really?' — the kind of thing people share.\n"
+                            "7: Interesting but not that surprising. More like 'huh, cool' than 'NO WAY'.\n"
+                            "5-6: Boring. Sounds like a textbook or Wikipedia intro. Nobody would share this.\n"
+                            "1-4: Terrible. Common knowledge, vague, or just an opinion.\n\n"
+                            "A fact that makes someone say 'wait, really?' and want to tell a friend = 8.\n"
+                            "A fact that's just mildly interesting trivia with no shock = 7.\n"
+                            "Be honest but fair.\n\n"
                             "Respond with JSON only:\n"
                             "{\"score\": 7, \"reason\": \"brief reason\"}"
                         ),
                     },
                 ],
-                temperature=0.3,  # Low temp for consistent, honest scoring
+                temperature=0.5,
                 max_tokens=100,
             )
 
