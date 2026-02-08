@@ -2,14 +2,9 @@ name: Generate and Upload YouTube Short
 
 on:
   schedule:
-    # Runs at 9 AM, 12 PM, and 3 PM Pacific Time
-    # Cron uses UTC, so we convert (PST = UTC-8, PDT = UTC-7):
-    # 9 AM PT = 17:00 UTC (PST) or 16:00 UTC (PDT)
-    # 12 PM PT = 20:00 UTC (PST) or 19:00 UTC (PDT)
-    # 3 PM PT = 23:00 UTC (PST) or 22:00 UTC (PDT)
-    - cron: '0 17 * * *'   # 9 AM PT
-    - cron: '0 20 * * *'   # 12 PM PT
-    - cron: '0 23 * * *'   # 3 PM PT
+    # Runs once daily at 9 AM Pacific Time
+    # PST = UTC-8, so 9 AM PST = 17:00 UTC
+    - cron: '0 17 * * *'
 
   workflow_dispatch:  # Allow manual trigger
     inputs:
