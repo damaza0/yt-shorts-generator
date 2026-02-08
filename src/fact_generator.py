@@ -105,23 +105,25 @@ The fact MUST match what is VISUALLY shown in the video. Examples:
 - "cars on a road" = write about cars/driving/roads, NOT the destination
 - "reindeer grazing" = write about REINDEER specifically, not winter in general
 
-WRITING STYLE - THIS IS CRITICAL:
+WRITING STYLE - THIS IS CRITICAL. FOLLOW THESE RULES STRICTLY:
 - Write like you're telling a friend something insane, not like a Wikipedia article
 - Short punchy sentences. No filler words.
 - Lead with the most shocking part, not the setup
 - Use "you" and "your" to make it personal when it fits
-- NEVER start with "Did you know" — that's overdone and boring
-- NEVER use phrases like "Imagine this" or "Picture this" — just state the fact
 - Numbers hit harder than adjectives: "3,000 years old" > "very ancient"
 - Every sentence MUST add a new fact or detail. NEVER write a sentence that just reacts to or comments on the previous one.
 - No exclamation marks in the fact text. Use periods. Let the fact speak for itself.
 
-NEVER WRITE THESE (filler/commentary that adds nothing):
+STRICTLY BANNED - Using ANY of these will make the fact FAIL quality review:
+- "Did you know" — overdone and boring. NEVER start with this.
+- "Imagine this" / "Picture this" / "Imagine the..." — NEVER use imagine or picture. Just state the fact.
+- "That's not just X, it's Y" / "It's like X without Y" — commentary disguised as comparison
 - "Talk about X!" / "Now THAT'S X." / "Let that sink in." / "Pretty wild, right?"
 - "They're the X of the Y world" / "real-life symbols of Z" / "nature's version of X"
 - "This beast" / "this bad boy" / "a whopping" / "a jaw-dropping" / "a staggering"
 - "Making it one of the most..." / "It's no surprise that..." / "truly remarkable"
 - Any sentence that is just a reaction, summary, or commentary on the fact you just stated
+- Any sentence that doesn't add NEW information. If you remove a sentence and the fact still works, that sentence is filler. Delete it.
 
 GOOD vs BAD writing (same fact, different quality):
 BAD: "Camels can drink 30 gallons of water in just 13 minutes. Then they survive weeks without a single sip. Talk about survival skills!"
@@ -129,6 +131,9 @@ GOOD: "Camels can drink 30 gallons of water in 13 minutes, then survive weeks wi
 
 BAD: "Night Herons have sharp eyesight that lets them hunt fish in low-light. They're like the night vision experts of the bird world!"
 GOOD: "Night herons vibrate their bills underwater to lure fish closer. Then they strike in the dark."
+
+BAD: "Giant groupers are so massive they've been found with scuba gear in their bellies. Imagine the size of a fish that can swallow diving equipment."
+GOOD: "Giant groupers have been found with full scuba tanks inside their stomachs. These fish can grow over 8 feet long and weigh 800 pounds."
 
 HOOK GUIDELINES:
 The hook should be SPECIFIC to the fact, not generic. It should tease the most shocking/interesting part.
