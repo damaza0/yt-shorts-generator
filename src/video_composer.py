@@ -81,7 +81,7 @@ class VideoComposer:
                 if audio.duration > self.duration:
                     audio = audio.subclipped(0, self.duration)
                 # Lower music volume to sit in the background
-                audio = audio.with_effects([MultiplyVolume(0.5)])
+                audio = audio.with_effects([MultiplyVolume(0.15)])
                 final = final.with_audio(audio)
             except Exception as e:
                 print(f"    Warning: Could not add music: {e}")
