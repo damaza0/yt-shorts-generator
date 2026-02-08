@@ -124,6 +124,7 @@ STRICTLY BANNED - Using ANY of these will make the fact FAIL quality review:
 - "Making it one of the most..." / "It's no surprise that..." / "truly remarkable"
 - Any sentence that is just a reaction, summary, or commentary on the fact you just stated
 - Any sentence that doesn't add NEW information. If you remove a sentence and the fact still works, that sentence is filler. Delete it.
+- Scientific jargon or technical terms that a normal person wouldn't understand (e.g., "lithospheric dripping", "crepuscular", "gastric eversion"). EXCEPTION: you CAN use a technical term if the fact explains what it means in plain language (e.g., "stomach eversion — basically pushing their stomach out through their mouth").
 
 GOOD vs BAD writing (same fact, different quality):
 BAD: "Camels can drink 30 gallons of water in just 13 minutes. Then they survive weeks without a single sip. Talk about survival skills!"
