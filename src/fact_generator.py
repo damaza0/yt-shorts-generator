@@ -250,6 +250,66 @@ If NONE of the search results contain anything good (nothing scores above 6), se
             interest_score=interest_score,
         )
 
+    def score_fact_independently(self, fact: GeneratedFact) -> int:
+        """Score a fact with a separate, independent GPT call.
+
+        This is a cold judge — it receives ONLY the hook and fact text,
+        with no context about the topic, search results, or video.
+        It has no ego investment in the fact because it didn't write it.
+
+        Returns an integer score 1-10.
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a brutally honest content judge for YouTube Shorts. "
+                            "You score facts on a 1-10 scale. You are HARSH. Most facts are 5-7. "
+                            "Only truly shocking, specific, counterintuitive facts score 8+. "
+                            "You have no bias — you didn't write this fact and you don't care about being nice."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Rate this YouTube Short fact 1-10. Would it make someone stop scrolling and share it?\n\n"
+                            f"Hook: \"{fact.hook}\"\n"
+                            f"Fact: \"{fact.fact_text}\"\n\n"
+                            "SCORING RULES:\n"
+                            "9-10: Genuinely jaw-dropping. I'd screenshot this and send it to 5 friends right now.\n"
+                            "8: Really surprising. Makes you go 'wait, seriously?' and want to verify it.\n"
+                            "7: Decent trivia. Mildly interesting but wouldn't make anyone share it.\n"
+                            "5-6: Boring. Sounds like a Wikipedia summary or travel brochure.\n"
+                            "1-4: Terrible. Common knowledge, vague, or just an opinion disguised as a fact.\n\n"
+                            "Be honest. Most facts are NOT 8+. If it doesn't genuinely shock you, don't score it high.\n\n"
+                            "Respond with JSON only:\n"
+                            "{\"score\": 7, \"reason\": \"brief reason\"}"
+                        ),
+                    },
+                ],
+                temperature=0.3,  # Low temp for consistent, honest scoring
+                max_tokens=100,
+            )
+
+            content = response.choices[0].message.content
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
+            data = json.loads(content.strip())
+            score = int(data.get("score", 5))
+            reason = data.get("reason", "")
+            print(f"    Independent score: {score}/10 — {reason[:80]}")
+            return score
+
+        except Exception as e:
+            print(f"    Independent scoring failed ({e}), using original score")
+            return fact.interest_score
+
     METADATA_PROMPT = """Based on this viral fact, generate YouTube Shorts metadata.
 
 Fact Hook: {hook}

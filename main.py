@@ -113,7 +113,7 @@ def generate(topic, duration, no_music, output):
     click.echo(click.style("\n=== YouTube Shorts Generator ===\n", fg="cyan", bold=True))
 
     MIN_INTEREST_SCORE = 8
-    MAX_TOPIC_ATTEMPTS = 5
+    MAX_TOPIC_ATTEMPTS = 10
 
     fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir, settings.openai_api_key)
     reviewer = VisionReviewer(settings.openai_api_key)
@@ -161,13 +161,19 @@ def generate(topic, duration, no_music, output):
         click.echo(f"   Fact: {fact.fact_text}")
         click.echo(f"   Highlights: {', '.join(fact.highlight_words)}")
         click.echo(f"   Category: {fact.category}")
-        click.echo(f"   Interest score: {click.style(str(fact.interest_score) + '/10', fg='yellow' if fact.interest_score >= MIN_INTEREST_SCORE else 'red')}")
+        click.echo(f"   Writer's score: {fact.interest_score}/10")
 
-        if fact.interest_score < MIN_INTEREST_SCORE:
-            click.echo(click.style(f"   Not interesting enough (score {fact.interest_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
+        # Independent scoring — a separate GPT call judges the fact cold
+        click.echo("   Running independent quality check...")
+        independent_score = fact_gen.score_fact_independently(fact)
+        fact.interest_score = independent_score
+        click.echo(f"   Final score: {click.style(str(independent_score) + '/10', fg='yellow' if independent_score >= MIN_INTEREST_SCORE else 'red')}")
+
+        if independent_score < MIN_INTEREST_SCORE:
+            click.echo(click.style(f"   Not interesting enough (score {independent_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
             continue
 
-        click.echo(click.style(f"   Interesting enough! (score {fact.interest_score}/10)", fg="green"))
+        click.echo(click.style(f"   Passed quality gate! (score {independent_score}/10)", fg="green"))
 
         # Step 3: Get music
         music_track = None
@@ -311,7 +317,7 @@ def auto(topic, duration, privacy, no_upload):
     click.echo(click.style("\n=== YouTube Shorts Auto Generator ===\n", fg="cyan", bold=True))
 
     MIN_INTEREST_SCORE = 8
-    MAX_TOPIC_ATTEMPTS = 5
+    MAX_TOPIC_ATTEMPTS = 10
 
     fetcher = VideoFetcher(settings.pexels_api_key, settings.video_cache_dir, settings.openai_api_key)
     reviewer = VisionReviewer(settings.openai_api_key)
@@ -359,13 +365,19 @@ def auto(topic, duration, privacy, no_upload):
         click.echo(f"   Hook: {click.style(fact.hook, fg='yellow')}")
         click.echo(f"   Fact: {fact.fact_text}")
         click.echo(f"   Category: {fact.category}")
-        click.echo(f"   Interest score: {click.style(str(fact.interest_score) + '/10', fg='yellow' if fact.interest_score >= MIN_INTEREST_SCORE else 'red')}")
+        click.echo(f"   Writer's score: {fact.interest_score}/10")
 
-        if fact.interest_score < MIN_INTEREST_SCORE:
-            click.echo(click.style(f"   Not interesting enough (score {fact.interest_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
+        # Independent scoring — a separate GPT call judges the fact cold
+        click.echo("   Running independent quality check...")
+        independent_score = fact_gen.score_fact_independently(fact)
+        fact.interest_score = independent_score
+        click.echo(f"   Final score: {click.style(str(independent_score) + '/10', fg='yellow' if independent_score >= MIN_INTEREST_SCORE else 'red')}")
+
+        if independent_score < MIN_INTEREST_SCORE:
+            click.echo(click.style(f"   Not interesting enough (score {independent_score}/10, need {MIN_INTEREST_SCORE}+). Trying new topic...", fg="red"))
             continue
 
-        click.echo(click.style(f"   Interesting enough! (score {fact.interest_score}/10)", fg="green"))
+        click.echo(click.style(f"   Passed quality gate! (score {independent_score}/10)", fg="green"))
 
         # Step 3: Get music
         click.echo("\n3. Picking background music...")
