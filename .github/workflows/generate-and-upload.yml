@@ -1,12 +1,9 @@
-name: Generate and Upload YouTube Short
+# DISABLED: Video production paused for this channel.
+# To re-enable, uncomment the triggers below and the job steps.
+name: Generate and Upload YouTube Short (DISABLED)
 
 on:
-  schedule:
-    # Runs once daily at 9 AM Pacific Time
-    # PST = UTC-8, so 9 AM PST = 17:00 UTC
-    - cron: '0 17 * * *'
-
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Manual trigger only — schedule removed
     inputs:
       topic:
         description: 'Video topic (optional, e.g., "ocean", "space")'
@@ -28,7 +25,8 @@ env:
 jobs:
   generate-and-upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Cancel if video generation + upload takes longer than 10 mins
+    timeout-minutes: 10
+    if: false  # Job is disabled — will never run even if manually triggered
 
     steps:
       - name: Checkout repository

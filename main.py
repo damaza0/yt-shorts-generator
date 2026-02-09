@@ -278,12 +278,11 @@ def batch(ctx, count, topic, duration):
 @click.option("--duration", "-d", default=8, help="Video duration in seconds (default: 8)")
 @click.option("--privacy", "-p", default="public", type=click.Choice(["public", "private", "unlisted"]),
               help="YouTube video privacy (default: public)")
-@click.option("--no-upload", is_flag=True, default=False, help="Generate video without uploading to YouTube")
-def auto(topic, duration, privacy, no_upload):
-    """Generate and upload a YouTube Short automatically.
+@click.option("--upload", is_flag=True, default=False, help="Upload to YouTube after generating video")
+def auto(topic, duration, privacy, upload):
+    """Generate a YouTube Short automatically.
 
-    This command is designed for automation (GitHub Actions, cron jobs, etc.).
-    It generates a video and uploads it to YouTube with auto-generated metadata.
+    This command generates a video locally. Pass --upload to also upload it to YouTube.
 
     Required environment variables for upload:
     - YOUTUBE_CLIENT_ID
@@ -454,8 +453,8 @@ def auto(topic, duration, privacy, no_upload):
     click.echo(f"   Tags: {', '.join(metadata.tags[:5])}...")
 
     # Step 8: Upload to YouTube (if enabled)
-    if no_upload:
-        click.echo("\n8. Skipping upload (--no-upload flag)")
+    if not upload:
+        click.echo("\n8. Skipping upload (pass --upload to upload)")
         click.echo(click.style("\n=== Video Generated Successfully! ===\n", fg="green", bold=True))
         click.echo(f"Output: {output_path}")
     else:
